@@ -136,3 +136,22 @@ td input,td select{min-height:36px;padding:6px 8px}
 @media (max-width:760px){.two-col{grid-template-columns:1fr}}
 .admin-topbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:18px}
 .admin-topbar a{font-weight:700;color:var(--accent);text-decoration:none;font-size:14px}
+
+/* auth screen */
+.auth-wrap{display:flex;justify-content:center;padding-top:10px}
+.auth-card{max-width:400px;width:100%}
+.auth-mark{width:52px;height:52px;border-radius:14px;background:linear-gradient(155deg,var(--accent),#5b21b6);color:#fff;font-family:var(--display);font-weight:700;font-size:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 6px 16px -4px rgba(124,58,237,.45)}
+
+/* general polish */
+.card,.card-section,.drawer-panel,.order-card,.stat-tile{box-shadow:0 1px 2px rgba(20,10,40,.04)}
+.card{transition:transform .15s ease, box-shadow .15s ease}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 24px -8px rgba(60,30,110,.18)}
+.btn{transition:filter .12s ease, transform .05s ease}
+.btn:hover:not(:disabled){filter:brightness(1.08)}
+.btn:active:not(:disabled){transform:translateY(1px)}
+.btn-ghost:hover{background:var(--line)}
+.site-nav a{transition:color .12s ease}
+.site-nav a:hover{color:var(--ink)}
+.tabs button{transition:color .12s ease,border-color .12s ease}
+input,select,textarea{transition:border-color .12s ease}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}

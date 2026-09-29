@@ -192,18 +192,20 @@ $('checkout-btn').addEventListener('click', function(){
 function renderLogin(signup){
   var app = $('app');
   app.innerHTML =
-    '<div class="card-section" style="max-width:420px;margin:0 auto">'+
-      '<h2>'+(signup?'Create an account':'Sign in')+'</h2>'+
-      (signup?'<label>Full name<input id="f-name" required></label><br>':'')+
+    '<div class="auth-wrap">'+
+    '<div class="card-section auth-card">'+
+      '<div class="auth-mark">jT</div>'+
+      '<h2 style="text-align:center">'+(signup?'Create an account':'Welcome back')+'</h2>'+
+      '<p class="helper" style="text-align:center;margin:-4px 0 18px">'+(signup?'Sign up to order from jT Shop':'Sign in to continue shopping')+'</p>'+
       '<form id="auth-form" class="form-grid">'+
-        (signup?'<label class="wide">Full name<input id="f-name" required></label>':'')+
+        (signup?'<label class="wide">Full name<input id="f-name" required autocomplete="name"></label>':'')+
         '<label class="wide">Email<input id="f-email" type="email" required autocomplete="email"></label>'+
         '<label class="wide">Password<input id="f-pass" type="password" required minlength="6" autocomplete="'+(signup?'new-password':'current-password')+'"></label>'+
         '<button class="btn btn-primary wide" type="submit">'+(signup?'Sign up':'Sign in')+'</button>'+
       '</form>'+
       '<p class="msg" id="auth-msg"></p>'+
-      '<p class="helper">'+(signup?'Already have an account? <a href="#/login">Sign in</a>':'New here? <a href="#/signup">Create an account</a>')+'</p>'+
-    '</div>';
+      '<p class="helper" style="text-align:center">'+(signup?'Already have an account? <a href="#/login">Sign in</a>':'New here? <a href="#/signup">Create an account</a>')+'</p>'+
+    '</div></div>';
   $('auth-form').addEventListener('submit', function(ev){
     ev.preventDefault();
     var email=$('f-email').value.trim(), pass=$('f-pass').value;

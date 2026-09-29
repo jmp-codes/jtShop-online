@@ -16,14 +16,13 @@
 
 <header class="site-header">
   <a class="brand" href="index.html">jT <span>Shop</span></a>
-  <nav class="site-nav"><span class="helper" style="font-weight:700;color:var(--accent)">Admin</span></nav>
-  <div class="header-actions"><span id="acct" class="acct"></span></div>
+  <span class="admin-badge">Admin</span>
+  <div class="header-actions"><a href="index.html" class="helper" style="font-weight:600">← Shop</a><span id="acct" class="acct"></span></div>
 </header>
 
 <main id="app" class="app">
   <div class="admin-topbar">
-    <h1 style="margin:0">Admin</h1>
-    <a href="index.html">← Back to shop</a>
+    <h1 style="margin:0">Overview</h1>
   </div>
   <div class="tabs">
     <button data-tab="dashboard" class="active">Dashboard</button>
@@ -34,6 +33,14 @@
 </main>
 
 <footer class="site-footer">jT Shop · admin</footer>
+
+<div id="modal-scrim" class="scrim" hidden></div>
+<div id="modal" class="modal" hidden>
+  <div class="modal-panel">
+    <div class="modal-head"><h2 id="modal-title">Add a product</h2><button class="icon-btn" id="modal-close" aria-label="Close">✕</button></div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>

@@ -10,6 +10,29 @@ var statuses=['pending','confirmed','preparing','out_for_delivery','completed','
 var toastTimer=null;
 function toast(msg){ var t=$('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(function(){t.hidden=true},2600); }
 function errBox(e){ return '<p class="msg err">Something went wrong: '+esc(e.message||e)+'</p>'; }
+function friendlyDbError(e){
+  if(e && e.code==='23505') return 'A product with that name already exists.';
+  return (e && e.message) || String(e);
+}
+
+/* ---------------- modal ---------------- */
+function openModal(title, bodyHtml){
+  $('modal-title').textContent = title;
+  $('modal-body').innerHTML = bodyHtml;
+  $('modal').hidden = false;
+  $('modal-scrim').hidden = false;
+}
+function closeModal(){
+  $('modal').hidden = true;
+  $('modal-scrim').hidden = true;
+  $('modal-body').innerHTML = '';
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var mc = $('modal-close'), ms = $('modal-scrim');
+  if(mc) mc.addEventListener('click', closeModal);
+  if(ms) ms.addEventListener('click', closeModal);
+});
+document.addEventListener('keydown', function(ev){ if(ev.key==='Escape') closeModal(); });
 
 var products = [];
 var orders = [];
@@ -36,7 +59,8 @@ function boot(){
     }
     sb.from('shop_profiles').select('*').eq('id',session.user.id).single().then(function(r){
       var profile = r.data;
-      $('acct').textContent = (profile&&profile.full_name) || session.user.email;
+      $('acct').innerHTML = esc((profile&&profile.full_name) || session.user.email)+' &middot; <button class="linklike" id="signout-btn">Sign out</button>';
+      var sob=$('signout-btn'); if(sob) sob.addEventListener('click', function(){ sb.auth.signOut().then(function(){ location.href='index.html'; }); });
       if(!profile || profile.role!=='admin'){
         $('app').innerHTML = '<p class="empty">This account is not an admin. <a href="index.html">Back to shop</a></p>';
         return;
@@ -158,28 +182,26 @@ function renderOrders(body){
 }
 
 /* ---------------- products / inventory ---------------- */
+function nameTaken(name, excludeId){
+  var key = name.trim().toLowerCase();
+  return products.some(function(p){ return p.id!==excludeId && p.name.trim().toLowerCase()===key; });
+}
 function renderProducts(body){
   body.innerHTML =
-    '<div class="card-section">'+
-      '<h2>Add a product</h2>'+
-      '<form id="new-product" class="form-grid">'+
-        '<label class="wide">Name<input id="np-name" required></label>'+
-        '<label class="wide">Description<input id="np-desc"></label>'+
-        '<label>Price (₱)<input id="np-price" type="number" min="0" step="0.01" required></label>'+
-        '<label>Cost (₱)<input id="np-cost" type="number" min="0" step="0.01" value="0"></label>'+
-        '<label>Starting stock<input id="np-stock" type="number" min="0" step="1" value="0" required></label>'+
-        '<label class="wide">Image URL (optional)<input id="np-image"></label>'+
-        '<button class="btn btn-primary wide" type="submit">Add product</button>'+
-      '</form><p class="msg" id="np-msg"></p>'+
+    '<div class="admin-topbar" style="margin-bottom:14px">'+
+      '<h2 style="margin:0">Inventory &middot; '+products.length+' product'+(products.length===1?'':'s')+'</h2>'+
+      '<button class="btn btn-primary" id="open-add-product">+ Add product</button>'+
     '</div>'+
-    '<div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Price</th><th>Cost</th><th>Stock</th><th>Active</th><th></th></tr></thead><tbody id="prod-body"></tbody></table></div>';
+    '<div class="tbl-wrap"><table class="prod-table"><colgroup>'+
+      '<col class="col-name"><col class="col-num"><col class="col-num"><col class="col-num"><col class="col-active"><col class="col-save">'+
+    '</colgroup><thead><tr><th>Name</th><th>Price</th><th>Cost</th><th>Stock</th><th>Active</th><th></th></tr></thead><tbody id="prod-body"></tbody></table></div>';
   $('prod-body').innerHTML = products.map(function(p){
     return '<tr data-row="'+p.id+'">'+
-      '<td><input value="'+esc(p.name)+'" data-f="name" style="min-width:200px"></td>'+
-      '<td><input type="number" step="0.01" value="'+p.price+'" data-f="price" style="width:90px"></td>'+
-      '<td><input type="number" step="0.01" value="'+p.cost+'" data-f="cost" style="width:90px"></td>'+
-      '<td><input type="number" step="1" value="'+p.stock_qty+'" data-f="stock_qty" style="width:70px"></td>'+
-      '<td><input type="checkbox" data-f="active" '+(p.active?'checked':'')+'></td>'+
+      '<td><input class="prod-input" value="'+esc(p.name)+'" data-f="name" title="'+esc(p.name)+'"></td>'+
+      '<td><input class="prod-input" type="number" step="0.01" value="'+p.price+'" data-f="price"></td>'+
+      '<td><input class="prod-input" type="number" step="0.01" value="'+p.cost+'" data-f="cost"></td>'+
+      '<td><input class="prod-input" type="number" step="1" value="'+p.stock_qty+'" data-f="stock_qty"></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-f="active" '+(p.active?'checked':'')+'></td>'+
       '<td><button class="btn btn-ghost btn-sm" data-save="'+p.id+'">Save</button></td>'+
     '</tr>';
   }).join('');
@@ -187,18 +209,45 @@ function renderProducts(body){
     btn.addEventListener('click', function(){
       var id = btn.getAttribute('data-save');
       var row = $('prod-body').querySelector('[data-row="'+id+'"]');
+      var name = row.querySelector('[data-f=name]').value.trim();
+      if(!name){ toast('Product name can\'t be empty.'); return; }
+      if(nameTaken(name, id)){ toast('Another product is already named "'+name+'".'); return; }
       var patch = {
-        name: row.querySelector('[data-f=name]').value.trim(),
+        name: name,
         price: parseFloat(row.querySelector('[data-f=price]').value)||0,
         cost: parseFloat(row.querySelector('[data-f=cost]').value)||0,
         stock_qty: parseInt(row.querySelector('[data-f=stock_qty]').value,10)||0,
         active: row.querySelector('[data-f=active]').checked
       };
+      btn.disabled = true;
       sb.from('shop_products').update(patch).eq('id',id).then(function(r){
-        if(r.error) toast(r.error.message); else toast('Saved');
+        btn.disabled = false;
+        if(r.error){ toast(friendlyDbError(r.error)); return; }
+        toast('Saved');
+        var local = products.find(function(x){return x.id===id});
+        if(local) Object.assign(local, patch);
       });
     });
   });
+  $('open-add-product').addEventListener('click', openAddProductModal);
+}
+function openAddProductModal(){
+  openModal('Add a product',
+    '<form id="new-product" class="form-grid">'+
+      '<label class="wide">Name<input id="np-name" required autofocus></label>'+
+      '<label class="wide">Description<input id="np-desc"></label>'+
+      '<label>Price (₱)<input id="np-price" type="number" min="0" step="0.01" required></label>'+
+      '<label>Cost (₱)<input id="np-cost" type="number" min="0" step="0.01" value="0"></label>'+
+      '<label>Starting stock<input id="np-stock" type="number" min="0" step="1" value="0" required></label>'+
+      '<label class="wide">Image URL (optional)<input id="np-image"></label>'+
+      '<div class="wide" style="display:flex;gap:10px;justify-content:flex-end">'+
+        '<button type="button" class="btn btn-ghost" id="np-cancel">Cancel</button>'+
+        '<button class="btn btn-primary" type="submit">Add product</button>'+
+      '</div>'+
+    '</form><p class="msg" id="np-msg"></p>'
+  );
+  $('np-cancel').addEventListener('click', closeModal);
+  $('np-name').focus();
   $('new-product').addEventListener('submit', function(ev){
     ev.preventDefault();
     var msg=$('np-msg');
@@ -211,9 +260,13 @@ function renderProducts(body){
       image_url: $('np-image').value.trim()||null
     };
     if(!row.name||!(row.price>=0)){ msg.textContent='Enter a name and a price.'; msg.className='msg err'; return; }
+    if(nameTaken(row.name, null)){ msg.textContent='A product named "'+row.name+'" already exists.'; msg.className='msg err'; return; }
+    var submitBtn = ev.target.querySelector('button[type=submit]'); submitBtn.disabled = true;
     sb.from('shop_products').insert(row).then(function(r){
-      if(r.error){ msg.textContent=r.error.message; msg.className='msg err'; return; }
-      msg.textContent='Added.'; msg.className='msg ok';
+      submitBtn.disabled = false;
+      if(r.error){ msg.textContent=friendlyDbError(r.error); msg.className='msg err'; return; }
+      toast('Product added');
+      closeModal();
       showTab('products');
     });
   });

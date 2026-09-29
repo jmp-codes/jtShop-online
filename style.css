@@ -161,3 +161,30 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .pw-wrap input{width:100%;padding-right:56px}
 .pw-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--accent);font-weight:700;font-size:12.5px;padding:6px 8px;cursor:pointer;border-radius:6px}
 .pw-toggle:hover{background:var(--accent-soft)}
+
+/* admin header badge */
+.admin-badge{background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:12px;padding:4px 10px;border-radius:99px;margin-left:2px}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;pointer-events:none}
+.modal-panel{pointer-events:auto;background:var(--surface);border-radius:14px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px -12px rgba(30,10,60,.35)}
+.modal-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.modal-head h2{margin:0;font-size:18px}
+.modal-body{padding:20px}
+#modal-scrim{z-index:49}
+
+/* editable inventory table */
+.prod-input{width:100%;background:var(--surface);border:1px solid var(--line)}
+.prod-input:hover{border-color:var(--accent)}
+.prod-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.tbl-wrap table thead th{position:sticky;top:0;z-index:1}
+.tbl-wrap tbody tr:hover{background:var(--surface2)}
+.tbl-wrap{max-height:70vh;overflow-y:auto}
+.prod-table{table-layout:fixed;min-width:760px}
+.prod-table .col-name{width:38%}
+.prod-table .col-num{width:14%}
+.prod-table .col-active{width:9%}
+.prod-table .col-save{width:11%}
+.prod-table td{overflow:hidden}
+.prod-table td input.prod-input{text-overflow:ellipsis}
+.prod-table td input[data-f="name"]{font-weight:600}

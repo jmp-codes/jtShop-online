@@ -155,3 +155,9 @@ td input,td select{min-height:36px;padding:6px 8px}
 .tabs button{transition:color .12s ease,border-color .12s ease}
 input,select,textarea{transition:border-color .12s ease}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+
+/* password visibility toggle */
+.pw-wrap{position:relative}
+.pw-wrap input{width:100%;padding-right:56px}
+.pw-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:0;color:var(--accent);font-weight:700;font-size:12.5px;padding:6px 8px;cursor:pointer;border-radius:6px}
+.pw-toggle:hover{background:var(--accent-soft)}

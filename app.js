@@ -4,6 +4,22 @@ var sb = supabase.createClient(window.SHOP_CONFIG.supabaseUrl, window.SHOP_CONFI
 var peso = new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'});
 var $ = function(id){return document.getElementById(id)};
 var esc = function(s){var d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML};
+function pwField(id, autocomplete){
+  return '<div class="pw-wrap">'+
+    '<input id="'+id+'" type="password" required minlength="6" autocomplete="'+autocomplete+'">'+
+    '<button type="button" class="pw-toggle" data-target="'+id+'" aria-label="Show password">Show</button>'+
+  '</div>';
+}
+document.addEventListener('click', function(ev){
+  var b = ev.target.closest('.pw-toggle');
+  if(!b) return;
+  var inp = $(b.getAttribute('data-target'));
+  if(!inp) return;
+  var show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  b.textContent = show ? 'Hide' : 'Show';
+  b.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+});
 
 var state = {
   session: null,
@@ -202,7 +218,7 @@ function renderLogin(signup){
       '<form id="auth-form" class="form-grid">'+
         (signup?'<label class="wide">Full name<input id="f-name" required autocomplete="name"></label>':'')+
         '<label class="wide">Email<input id="f-email" type="email" required autocomplete="email"></label>'+
-        '<label class="wide">Password<input id="f-pass" type="password" required minlength="6" autocomplete="'+(signup?'new-password':'current-password')+'"></label>'+
+        '<label class="wide">Password'+pwField('f-pass', signup?'new-password':'current-password')+'</label>'+
         (signup?'':'<div style="text-align:right;margin-top:-8px"><a href="#/forgot" style="font-size:13px;font-weight:600">Forgot password?</a></div>')+
         '<button class="btn btn-primary wide" type="submit">'+(signup?'Sign up':'Sign in')+'</button>'+
       '</form>'+
@@ -245,7 +261,10 @@ function renderForgot(){
     ev.preventDefault();
     var msg = $('forgot-msg'); msg.textContent='Sending…'; msg.className='msg';
     var email = $('fg-email').value.trim();
-    var redirectTo = location.origin + location.pathname + '#/reset';
+    // No hash of our own here: Supabase appends the recovery tokens as a
+    // URL hash fragment, and a URL can only have one. We route to the
+    // reset screen from the PASSWORD_RECOVERY auth event instead (below).
+    var redirectTo = location.origin + location.pathname;
     sb.auth.resetPasswordForEmail(email, {redirectTo:redirectTo}).then(function(r){
       if(r.error){ msg.textContent=r.error.message; msg.className='msg err'; return; }
       msg.textContent='If an account exists for that email, a reset link is on its way.'; msg.className='msg ok';
@@ -269,7 +288,7 @@ function renderReset(){
       '<h2 style="text-align:center">Set a new password</h2>'+
       '<p class="helper" style="text-align:center;margin:-4px 0 18px">Choose a new password for your account</p>'+
       '<form id="reset-form" class="form-grid">'+
-        '<label class="wide">New password<input id="r-pass" type="password" minlength="6" required autocomplete="new-password"></label>'+
+        '<label class="wide">New password'+pwField('r-pass', 'new-password')+'</label>'+
         '<button class="btn btn-primary wide" type="submit">Update password</button>'+
       '</form>'+
       '<p class="msg" id="reset-msg"></p>'+
@@ -378,17 +397,32 @@ function errBox(e){ return '<p class="msg err">Something went wrong: '+esc(e.mes
 window.addEventListener('hashchange', route);
 loadCart(); renderCartBadge();
 
-sb.auth.getSession().then(function(r){
-  state.session = r.data.session;
-  return refreshProfile();
-}).then(function(){
-  route();
-});
+// A password-reset link lands with Supabase's own tokens in the URL hash
+// (e.g. #access_token=...&type=recovery), which isn't one of our routes.
+// Show a neutral holding screen instead of "page not found" while
+// Supabase parses it and fires PASSWORD_RECOVERY below.
+var looksLikeAuthRedirect = /access_token=|type=recovery|error_description=/.test(location.hash);
+if(looksLikeAuthRedirect){
+  $('app').innerHTML = '<p class="helper" style="text-align:center;margin-top:40px">Verifying your link…</p>';
+} else {
+  sb.auth.getSession().then(function(r){
+    state.session = r.data.session;
+    return refreshProfile();
+  }).then(function(){
+    route();
+  });
+}
 sb.auth.onAuthStateChange(function(event, session){
   state.session = session;
+  if(event === 'PASSWORD_RECOVERY'){
+    refreshProfile().then(function(){
+      if(location.hash.replace(/^#/,'') === '/reset'){ route(); } else { location.hash = '/reset'; }
+    });
+    return;
+  }
   refreshProfile().then(function(){
     updateHeader();
-    if(event==='SIGNED_IN' || event==='SIGNED_OUT' || event==='PASSWORD_RECOVERY'){ route(); }
+    if(event==='SIGNED_IN' || event==='SIGNED_OUT'){ route(); }
   });
 });
 })();

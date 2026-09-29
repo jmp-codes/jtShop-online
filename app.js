@@ -88,7 +88,6 @@ function route(){
   if(hash==='/signup') return renderLogin(true);
   if(hash==='/checkout') return requireAuth(renderCheckout);
   if(hash==='/orders') return requireAuth(renderOrders);
-  if(hash==='/admin') return requireAdmin(renderAdmin);
   app.innerHTML = '<p class="empty">Page not found. <a href="#/">Back to shop</a></p>';
 }
 function requireAuth(fn){
@@ -308,127 +307,6 @@ function orderCard(adminView, o){
     '<div class="order-items">Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; '+esc(o.notes):'')+'</div>'+
     (!adminView && o.status==='pending' ? '<div style="margin-top:10px"><button class="btn btn-danger btn-sm" data-cancel="'+o.id+'">Cancel order</button></div>' : '')+
   '</div>';
-}
-
-/* ---------------- admin ---------------- */
-function renderAdmin(){
-  var app = $('app');
-  app.innerHTML =
-    '<h1>Admin</h1>'+
-    '<div class="tabs"><button data-tab="orders" class="active">Orders</button><button data-tab="products">Products</button></div>'+
-    '<div id="admin-body"></div>';
-  app.querySelectorAll('.tabs button').forEach(function(b){
-    b.addEventListener('click', function(){
-      app.querySelectorAll('.tabs button').forEach(function(x){x.classList.remove('active')});
-      b.classList.add('active');
-      b.getAttribute('data-tab')==='orders' ? adminOrders() : adminProducts();
-    });
-  });
-  adminOrders();
-}
-function adminOrders(){
-  var body = $('admin-body');
-  body.innerHTML = '<p class="helper">Loading…</p>';
-  sb.from('shop_orders').select('*, shop_order_items(*), shop_profiles(full_name)').order('created_at',{ascending:false})
-    .then(function(r){
-      if(r.error){ body.innerHTML = errBox(r.error); return; }
-      var orders = r.data||[];
-      if(!orders.length){ body.innerHTML='<p class="empty">No orders yet.</p>'; return; }
-      var statuses=['pending','confirmed','preparing','out_for_delivery','completed','cancelled'];
-      body.innerHTML = orders.map(function(o){
-        var items = (o.shop_order_items||[]).map(function(i){ return esc(i.name_snapshot)+' × '+i.qty+' ('+peso.format(i.subtotal)+')'; }).join('<br>');
-        var buyer = (o.shop_profiles && o.shop_profiles.full_name) || 'Customer';
-        return '<div class="order-card">'+
-          '<div class="order-head"><div><strong>'+esc(buyer)+'</strong> · '+peso.format(o.total)+' · <span class="helper">'+new Date(o.created_at).toLocaleString('en-PH')+'</span></div>'+
-          '<div>'+peso.format(o.total)+'</div></div>'+
-          '<div class="order-items">'+items+'</div>'+
-          '<div class="order-items">Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; Note: '+esc(o.notes):'')+' &middot; '+o.payment_method.toUpperCase()+'</div>'+
-          '<div class="form-grid" style="margin-top:10px;max-width:420px">'+
-            '<label>Status<select data-status="'+o.id+'">'+statuses.map(function(s){return '<option value="'+s+'"'+(s===o.status?' selected':'')+'>'+s.replace(/_/g,' ')+'</option>'}).join('')+'</select></label>'+
-            '<label>Payment<select data-payment="'+o.id+'"><option value="unpaid"'+(o.payment_status==='unpaid'?' selected':'')+'>Unpaid</option><option value="paid"'+(o.payment_status==='paid'?' selected':'')+'>Paid</option><option value="refunded"'+(o.payment_status==='refunded'?' selected':'')+'>Refunded</option></select></label>'+
-          '</div>'+
-        '</div>';
-      }).join('');
-      body.querySelectorAll('[data-status]').forEach(function(sel){
-        sel.addEventListener('change', function(){
-          var id=sel.getAttribute('data-status'), val=sel.value;
-          var task = val==='cancelled' ? sb.rpc('shop_cancel_order',{p_order_id:id}) : sb.from('shop_orders').update({status:val}).eq('id',id);
-          task.then(function(r){ if(r.error){ toast(r.error.message); } else { toast('Order updated'); } });
-        });
-      });
-      body.querySelectorAll('[data-payment]').forEach(function(sel){
-        sel.addEventListener('change', function(){
-          sb.from('shop_orders').update({payment_status:sel.value}).eq('id',sel.getAttribute('data-payment')).then(function(r){
-            if(r.error) toast(r.error.message); else toast('Payment status updated');
-          });
-        });
-      });
-    });
-}
-function adminProducts(){
-  var body = $('admin-body');
-  body.innerHTML = '<p class="helper">Loading…</p>';
-  fetchAdminProducts().then(function(){
-    body.innerHTML =
-      '<div class="card-section">'+
-        '<h2>Add a product</h2>'+
-        '<form id="new-product" class="form-grid">'+
-          '<label class="wide">Name<input id="np-name" required></label>'+
-          '<label class="wide">Description<input id="np-desc"></label>'+
-          '<label>Price (₱)<input id="np-price" type="number" min="0" step="0.01" required></label>'+
-          '<label>Cost (₱)<input id="np-cost" type="number" min="0" step="0.01" value="0"></label>'+
-          '<label>Starting stock<input id="np-stock" type="number" min="0" step="1" value="0" required></label>'+
-          '<label class="wide">Image URL (optional)<input id="np-image"></label>'+
-          '<button class="btn btn-primary wide" type="submit">Add product</button>'+
-        '</form><p class="msg" id="np-msg"></p>'+
-      '</div>'+
-      '<div class="tbl-wrap"><table><thead><tr><th>Name</th><th>Price</th><th>Cost</th><th>Stock</th><th>Active</th><th></th></tr></thead><tbody id="prod-body"></tbody></table></div>';
-    $('prod-body').innerHTML = state.adminProducts.map(function(p){
-      return '<tr data-row="'+p.id+'">'+
-        '<td><input value="'+esc(p.name)+'" data-f="name" style="min-width:200px"></td>'+
-        '<td><input type="number" step="0.01" value="'+p.price+'" data-f="price" style="width:90px"></td>'+
-        '<td><input type="number" step="0.01" value="'+p.cost+'" data-f="cost" style="width:90px"></td>'+
-        '<td><input type="number" step="1" value="'+p.stock_qty+'" data-f="stock_qty" style="width:70px"></td>'+
-        '<td><input type="checkbox" data-f="active" '+(p.active?'checked':'')+'></td>'+
-        '<td><button class="btn btn-ghost btn-sm" data-save="'+p.id+'">Save</button></td>'+
-      '</tr>';
-    }).join('');
-    $('prod-body').querySelectorAll('[data-save]').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        var id = btn.getAttribute('data-save');
-        var row = $('prod-body').querySelector('[data-row="'+id+'"]');
-        var patch = {
-          name: row.querySelector('[data-f=name]').value.trim(),
-          price: parseFloat(row.querySelector('[data-f=price]').value)||0,
-          cost: parseFloat(row.querySelector('[data-f=cost]').value)||0,
-          stock_qty: parseInt(row.querySelector('[data-f=stock_qty]').value,10)||0,
-          active: row.querySelector('[data-f=active]').checked
-        };
-        sb.from('shop_products').update(patch).eq('id',id).then(function(r){
-          if(r.error) toast(r.error.message); else toast('Saved');
-        });
-      });
-    });
-    $('new-product').addEventListener('submit', function(ev){
-      ev.preventDefault();
-      var msg=$('np-msg');
-      var row = {
-        name: $('np-name').value.trim(),
-        description: $('np-desc').value.trim()||null,
-        price: parseFloat($('np-price').value),
-        cost: parseFloat($('np-cost').value)||0,
-        stock_qty: parseInt($('np-stock').value,10)||0,
-        image_url: $('np-image').value.trim()||null
-      };
-      if(!row.name||!(row.price>=0)){ msg.textContent='Enter a name and a price.'; msg.className='msg err'; return; }
-      sb.from('shop_products').insert(row).then(function(r){
-        if(r.error){ msg.textContent=r.error.message; msg.className='msg err'; return; }
-        msg.textContent='Added.'; msg.className='msg ok';
-        ['np-name','np-desc','np-price','np-cost','np-stock','np-image'].forEach(function(id){$(id).value=id==='np-stock'||id==='np-cost'?'0':''});
-        adminProducts();
-      });
-    });
-  }).catch(function(e){ body.innerHTML = errBox(e); });
 }
 
 function errBox(e){ return '<p class="msg err">Something went wrong: '+esc(e.message||e)+'</p>'; }

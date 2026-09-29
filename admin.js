@@ -197,37 +197,71 @@ function renderProducts(body){
     '</colgroup><thead><tr><th>Name</th><th>Price</th><th>Stock</th><th>Active</th><th></th></tr></thead><tbody id="prod-body"></tbody></table></div>';
   $('prod-body').innerHTML = products.map(function(p){
     return '<tr data-row="'+p.id+'">'+
-      '<td><input class="prod-input" value="'+esc(p.name)+'" data-f="name" title="'+esc(p.name)+'"></td>'+
-      '<td><input class="prod-input" type="number" step="0.01" value="'+p.price+'" data-f="price"></td>'+
-      '<td><input class="prod-input" type="number" step="1" value="'+p.stock_qty+'" data-f="stock_qty"></td>'+
-      '<td style="text-align:center"><input type="checkbox" data-f="active" '+(p.active?'checked':'')+'></td>'+
-      '<td><button class="btn btn-ghost btn-sm" data-save="'+p.id+'">Save</button></td>'+
+      '<td><input class="prod-input" value="'+esc(p.name)+'" data-f="name" title="'+esc(p.name)+'" disabled></td>'+
+      '<td><input class="prod-input" type="number" step="0.01" value="'+p.price+'" data-f="price" disabled></td>'+
+      '<td><input class="prod-input" type="number" step="1" value="'+p.stock_qty+'" data-f="stock_qty" disabled></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-f="active" '+(p.active?'checked':'')+' disabled></td>'+
+      '<td class="row-actions"><button class="btn btn-ghost btn-sm" data-edit="'+p.id+'">Edit</button></td>'+
     '</tr>';
   }).join('');
-  $('prod-body').querySelectorAll('[data-save]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      var id = btn.getAttribute('data-save');
-      var row = $('prod-body').querySelector('[data-row="'+id+'"]');
-      var name = row.querySelector('[data-f=name]').value.trim();
-      if(!name){ toast('Product name can\'t be empty.'); return; }
-      if(nameTaken(name, id)){ toast('Another product is already named "'+name+'".'); return; }
-      var patch = {
-        name: name,
-        price: parseFloat(row.querySelector('[data-f=price]').value)||0,
-        stock_qty: parseInt(row.querySelector('[data-f=stock_qty]').value,10)||0,
-        active: row.querySelector('[data-f=active]').checked
-      };
-      btn.disabled = true;
-      sb.from('shop_products').update(patch).eq('id',id).then(function(r){
-        btn.disabled = false;
-        if(r.error){ toast(friendlyDbError(r.error)); return; }
-        toast('Saved');
-        var local = products.find(function(x){return x.id===id});
-        if(local) Object.assign(local, patch);
-      });
-    });
+  $('prod-body').querySelectorAll('[data-edit]').forEach(function(btn){
+    btn.addEventListener('click', function(){ enterEditMode(btn.getAttribute('data-edit')); });
   });
   $('open-add-product').addEventListener('click', openAddProductModal);
+}
+function enterEditMode(id){
+  var row = $('prod-body').querySelector('[data-row="'+id+'"]');
+  if(!row) return;
+  row.classList.add('editing');
+  row.querySelectorAll('input').forEach(function(inp){ inp.disabled = false; });
+  var nameInput = row.querySelector('[data-f=name]');
+  nameInput.focus();
+  nameInput.select();
+  var cell = row.querySelector('.row-actions');
+  cell.innerHTML =
+    '<div class="row-actions-btns">'+
+      '<button class="btn btn-ghost btn-sm" data-cancel="'+id+'">Cancel</button>'+
+      '<button class="btn btn-primary btn-sm" data-save="'+id+'">Save</button>'+
+    '</div>';
+  cell.querySelector('[data-cancel]').addEventListener('click', function(){ exitEditMode(id); });
+  cell.querySelector('[data-save]').addEventListener('click', function(){ saveRow(id); });
+}
+function exitEditMode(id){
+  var row = $('prod-body').querySelector('[data-row="'+id+'"]');
+  if(!row) return;
+  var local = products.find(function(x){return x.id===id});
+  row.classList.remove('editing');
+  row.querySelectorAll('input').forEach(function(inp){
+    var f = inp.getAttribute('data-f');
+    if(local){ if(f==='active') inp.checked = !!local.active; else inp.value = local[f]; }
+    inp.disabled = true;
+  });
+  var cell = row.querySelector('.row-actions');
+  cell.innerHTML = '<button class="btn btn-ghost btn-sm" data-edit="'+id+'">Edit</button>';
+  cell.querySelector('[data-edit]').addEventListener('click', function(){ enterEditMode(id); });
+}
+function saveRow(id){
+  var row = $('prod-body').querySelector('[data-row="'+id+'"]');
+  if(!row) return;
+  var name = row.querySelector('[data-f=name]').value.trim();
+  if(!name){ toast('Product name can\'t be empty.'); return; }
+  if(nameTaken(name, id)){ toast('Another product is already named "'+name+'".'); return; }
+  var patch = {
+    name: name,
+    price: parseFloat(row.querySelector('[data-f=price]').value)||0,
+    stock_qty: parseInt(row.querySelector('[data-f=stock_qty]').value,10)||0,
+    active: row.querySelector('[data-f=active]').checked
+  };
+  var saveBtn = row.querySelector('[data-save]');
+  if(saveBtn) saveBtn.disabled = true;
+  sb.from('shop_products').update(patch).eq('id',id).then(function(r){
+    if(saveBtn) saveBtn.disabled = false;
+    if(r.error){ toast(friendlyDbError(r.error)); return; }
+    var local = products.find(function(x){return x.id===id});
+    if(local) Object.assign(local, patch);
+    toast('Saved');
+    exitEditMode(id);
+  });
 }
 function openAddProductModal(){
   openModal('Add a product',

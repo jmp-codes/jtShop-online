@@ -86,6 +86,8 @@ function route(){
   if(hash==='/') return renderShop();
   if(hash==='/login') return renderLogin(false);
   if(hash==='/signup') return renderLogin(true);
+  if(hash==='/forgot') return renderForgot();
+  if(hash==='/reset') return renderReset();
   if(hash==='/checkout') return requireAuth(renderCheckout);
   if(hash==='/orders') return requireAuth(renderOrders);
   app.innerHTML = '<p class="empty">Page not found. <a href="#/">Back to shop</a></p>';
@@ -201,6 +203,7 @@ function renderLogin(signup){
         (signup?'<label class="wide">Full name<input id="f-name" required autocomplete="name"></label>':'')+
         '<label class="wide">Email<input id="f-email" type="email" required autocomplete="email"></label>'+
         '<label class="wide">Password<input id="f-pass" type="password" required minlength="6" autocomplete="'+(signup?'new-password':'current-password')+'"></label>'+
+        (signup?'':'<div style="text-align:right;margin-top:-8px"><a href="#/forgot" style="font-size:13px;font-weight:600">Forgot password?</a></div>')+
         '<button class="btn btn-primary wide" type="submit">'+(signup?'Sign up':'Sign in')+'</button>'+
       '</form>'+
       '<p class="msg" id="auth-msg"></p>'+
@@ -220,6 +223,64 @@ function renderLogin(signup){
         return;
       }
       location.hash = '#/';
+    });
+  });
+}
+
+function renderForgot(){
+  var app = $('app');
+  app.innerHTML =
+    '<div class="auth-wrap"><div class="card-section auth-card">'+
+      '<div class="auth-mark">jT</div>'+
+      '<h2 style="text-align:center">Reset your password</h2>'+
+      '<p class="helper" style="text-align:center;margin:-4px 0 18px">We\'ll email you a link to choose a new one</p>'+
+      '<form id="forgot-form" class="form-grid">'+
+        '<label class="wide">Email<input id="fg-email" type="email" required autocomplete="email"></label>'+
+        '<button class="btn btn-primary wide" type="submit">Send reset link</button>'+
+      '</form>'+
+      '<p class="msg" id="forgot-msg"></p>'+
+      '<p class="helper" style="text-align:center"><a href="#/login">Back to sign in</a></p>'+
+    '</div></div>';
+  $('forgot-form').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var msg = $('forgot-msg'); msg.textContent='Sending…'; msg.className='msg';
+    var email = $('fg-email').value.trim();
+    var redirectTo = location.origin + location.pathname + '#/reset';
+    sb.auth.resetPasswordForEmail(email, {redirectTo:redirectTo}).then(function(r){
+      if(r.error){ msg.textContent=r.error.message; msg.className='msg err'; return; }
+      msg.textContent='If an account exists for that email, a reset link is on its way.'; msg.className='msg ok';
+    });
+  });
+}
+
+function renderReset(){
+  var app = $('app');
+  if(!state.session){
+    app.innerHTML = '<div class="auth-wrap"><div class="card-section auth-card">'+
+      '<div class="auth-mark">jT</div>'+
+      '<h2 style="text-align:center">Verifying your link…</h2>'+
+      '<p class="helper" style="text-align:center">This only takes a moment. If nothing happens, the link may have expired — <a href="#/forgot">request a new one</a>.</p>'+
+    '</div></div>';
+    return;
+  }
+  app.innerHTML =
+    '<div class="auth-wrap"><div class="card-section auth-card">'+
+      '<div class="auth-mark">jT</div>'+
+      '<h2 style="text-align:center">Set a new password</h2>'+
+      '<p class="helper" style="text-align:center;margin:-4px 0 18px">Choose a new password for your account</p>'+
+      '<form id="reset-form" class="form-grid">'+
+        '<label class="wide">New password<input id="r-pass" type="password" minlength="6" required autocomplete="new-password"></label>'+
+        '<button class="btn btn-primary wide" type="submit">Update password</button>'+
+      '</form>'+
+      '<p class="msg" id="reset-msg"></p>'+
+    '</div></div>';
+  $('reset-form').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var msg = $('reset-msg'); msg.textContent='Updating…'; msg.className='msg';
+    sb.auth.updateUser({password:$('r-pass').value}).then(function(r){
+      if(r.error){ msg.textContent=r.error.message; msg.className='msg err'; return; }
+      msg.textContent='Password updated — taking you to the shop…'; msg.className='msg ok';
+      setTimeout(function(){ location.hash = '#/'; }, 1200);
     });
   });
 }
@@ -327,7 +388,7 @@ sb.auth.onAuthStateChange(function(event, session){
   state.session = session;
   refreshProfile().then(function(){
     updateHeader();
-    if(event==='SIGNED_IN' || event==='SIGNED_OUT'){ route(); }
+    if(event==='SIGNED_IN' || event==='SIGNED_OUT' || event==='PASSWORD_RECOVERY'){ route(); }
   });
 });
 })();

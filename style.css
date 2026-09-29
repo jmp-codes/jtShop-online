@@ -180,11 +180,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .tbl-wrap table thead th{position:sticky;top:0;z-index:1}
 .tbl-wrap tbody tr:hover{background:var(--surface2)}
 .tbl-wrap{max-height:70vh;overflow-y:auto}
-.prod-table{table-layout:fixed;min-width:760px}
-.prod-table .col-name{width:38%}
-.prod-table .col-num{width:14%}
-.prod-table .col-active{width:9%}
-.prod-table .col-save{width:11%}
+.prod-table{table-layout:fixed;min-width:620px}
+.prod-table .col-name{width:48%}
+.prod-table .col-num{width:18%}
+.prod-table .col-active{width:14%}
+.prod-table .col-save{width:14%}
 .prod-table td{overflow:hidden}
 .prod-table td input.prod-input{text-overflow:ellipsis}
 .prod-table td input[data-f="name"]{font-weight:600}

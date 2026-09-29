@@ -93,16 +93,16 @@ function showTab(tab){
 function renderDashboard(body){
   var live = orders.filter(function(o){ return o.status!=='cancelled'; });
   var unitsInStock = products.reduce(function(a,p){return a+p.stock_qty},0);
-  var stockValue = products.reduce(function(a,p){return a+p.stock_qty*p.cost},0);
+  var stockValue = products.reduce(function(a,p){return a+p.stock_qty*p.price},0);
   var lowStock = products.filter(function(p){return p.active && p.stock_qty>0 && p.stock_qty<=3});
   var outOfStock = products.filter(function(p){return p.active && p.stock_qty<=0});
   var revenue = live.reduce(function(a,o){return a+Number(o.total)},0);
   var collected = live.filter(function(o){return o.payment_status==='paid'}).reduce(function(a,o){return a+Number(o.total)},0);
-  var profit = 0;
+  var COMMISSION_RATE = 0.2; // ₱200 commission for every ₱1,000 sold
+  var commission = revenue * COMMISSION_RATE;
   var sold = {}; // name -> units
   live.forEach(function(o){
     (o.shop_order_items||[]).forEach(function(i){
-      profit += (Number(i.price_snapshot)-Number(i.cost_snapshot))*i.qty;
       sold[i.name_snapshot] = (sold[i.name_snapshot]||0) + i.qty;
     });
   });
@@ -117,13 +117,13 @@ function renderDashboard(body){
   body.innerHTML =
     '<div class="stat-grid">'+
       '<div class="stat-tile accent"><span class="l">Total revenue</span><span class="v">'+peso0.format(revenue)+'</span><span class="s">'+live.length+' orders, excludes cancelled</span></div>'+
-      '<div class="stat-tile"><span class="l">Gross profit</span><span class="v">'+peso0.format(profit)+'</span><span class="s">price minus cost, per item sold</span></div>'+
+      '<div class="stat-tile"><span class="l">Your commission</span><span class="v">'+peso0.format(commission)+'</span><span class="s">₱200 per ₱1,000 sold (20%)</span></div>'+
       '<div class="stat-tile"><span class="l">Collected</span><span class="v">'+peso0.format(collected)+'</span><span class="s">'+peso0.format(revenue-collected)+' still unpaid</span></div>'+
       '<div class="stat-tile"><span class="l">Today</span><span class="v">'+peso0.format(todayRevenue)+'</span><span class="s">'+todayOrders.length+' order'+(todayOrders.length===1?'':'s')+' today</span></div>'+
     '</div>'+
     '<div class="stat-grid">'+
       '<div class="stat-tile"><span class="l">Units in stock</span><span class="v">'+unitsInStock.toLocaleString('en-PH')+'</span><span class="s">across '+products.length+' products</span></div>'+
-      '<div class="stat-tile"><span class="l">Stock value</span><span class="v">'+peso0.format(stockValue)+'</span><span class="s">at cost</span></div>'+
+      '<div class="stat-tile"><span class="l">Stock value</span><span class="v">'+peso0.format(stockValue)+'</span><span class="s">at price</span></div>'+
       '<div class="stat-tile"><span class="l">Low stock</span><span class="v" style="color:var(--warn)">'+lowStock.length+'</span><span class="s">3 or fewer left</span></div>'+
       '<div class="stat-tile"><span class="l">Out of stock</span><span class="v" style="color:var(--bad)">'+outOfStock.length+'</span><span class="s">needs restock</span></div>'+
     '</div>'+
@@ -193,13 +193,12 @@ function renderProducts(body){
       '<button class="btn btn-primary" id="open-add-product">+ Add product</button>'+
     '</div>'+
     '<div class="tbl-wrap"><table class="prod-table"><colgroup>'+
-      '<col class="col-name"><col class="col-num"><col class="col-num"><col class="col-num"><col class="col-active"><col class="col-save">'+
-    '</colgroup><thead><tr><th>Name</th><th>Price</th><th>Cost</th><th>Stock</th><th>Active</th><th></th></tr></thead><tbody id="prod-body"></tbody></table></div>';
+      '<col class="col-name"><col class="col-num"><col class="col-num"><col class="col-active"><col class="col-save">'+
+    '</colgroup><thead><tr><th>Name</th><th>Price</th><th>Stock</th><th>Active</th><th></th></tr></thead><tbody id="prod-body"></tbody></table></div>';
   $('prod-body').innerHTML = products.map(function(p){
     return '<tr data-row="'+p.id+'">'+
       '<td><input class="prod-input" value="'+esc(p.name)+'" data-f="name" title="'+esc(p.name)+'"></td>'+
       '<td><input class="prod-input" type="number" step="0.01" value="'+p.price+'" data-f="price"></td>'+
-      '<td><input class="prod-input" type="number" step="0.01" value="'+p.cost+'" data-f="cost"></td>'+
       '<td><input class="prod-input" type="number" step="1" value="'+p.stock_qty+'" data-f="stock_qty"></td>'+
       '<td style="text-align:center"><input type="checkbox" data-f="active" '+(p.active?'checked':'')+'></td>'+
       '<td><button class="btn btn-ghost btn-sm" data-save="'+p.id+'">Save</button></td>'+
@@ -215,7 +214,6 @@ function renderProducts(body){
       var patch = {
         name: name,
         price: parseFloat(row.querySelector('[data-f=price]').value)||0,
-        cost: parseFloat(row.querySelector('[data-f=cost]').value)||0,
         stock_qty: parseInt(row.querySelector('[data-f=stock_qty]').value,10)||0,
         active: row.querySelector('[data-f=active]').checked
       };
@@ -237,7 +235,6 @@ function openAddProductModal(){
       '<label class="wide">Name<input id="np-name" required autofocus></label>'+
       '<label class="wide">Description<input id="np-desc"></label>'+
       '<label>Price (₱)<input id="np-price" type="number" min="0" step="0.01" required></label>'+
-      '<label>Cost (₱)<input id="np-cost" type="number" min="0" step="0.01" value="0"></label>'+
       '<label>Starting stock<input id="np-stock" type="number" min="0" step="1" value="0" required></label>'+
       '<label class="wide">Image URL (optional)<input id="np-image"></label>'+
       '<div class="wide" style="display:flex;gap:10px;justify-content:flex-end">'+
@@ -255,7 +252,6 @@ function openAddProductModal(){
       name: $('np-name').value.trim(),
       description: $('np-desc').value.trim()||null,
       price: parseFloat($('np-price').value),
-      cost: parseFloat($('np-cost').value)||0,
       stock_qty: parseInt($('np-stock').value,10)||0,
       image_url: $('np-image').value.trim()||null
     };

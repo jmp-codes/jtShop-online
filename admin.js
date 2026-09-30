@@ -214,16 +214,16 @@ function renderDashboard(body){
 var ORDER_FILTERS = [
   {key:'all', label:'All'},
   {key:'walk_in', label:'Walk-in Purchase'},
-  {key:'online', label:'Online Orders'},
-  {key:'cod', label:'Reservations'},
+  {key:'online_order', label:'Online Orders'},
   {key:'preorder', label:'Pre-orders'}
 ];
 var ordersFilter = 'all';
 var ordersPage = 1;
 function renderOrders(body){
-  var counts = {all: orders.length, walk_in:0, online:0, cod:0, preorder:0};
+  var counts = {all: orders.length, walk_in:0, online_order:0, preorder:0};
   orders.forEach(function(o){
-    if(counts[o.payment_method]!==undefined) counts[o.payment_method]++;
+    if(o.payment_method==='walk_in') counts.walk_in++;
+    else counts.online_order++; // placed through the site — cod or gcash
     if(o.has_preorder) counts.preorder++;
   });
   if(!ORDER_FILTERS.some(function(f){return f.key===ordersFilter})) ordersFilter='all';
@@ -250,7 +250,8 @@ function renderOrders(body){
   var list = $('order-list');
   var filtered = ordersFilter==='all' ? orders :
     ordersFilter==='preorder' ? orders.filter(function(o){ return o.has_preorder; }) :
-    orders.filter(function(o){ return o.payment_method===ordersFilter; });
+    ordersFilter==='walk_in' ? orders.filter(function(o){ return o.payment_method==='walk_in'; }) :
+    orders.filter(function(o){ return o.payment_method!=='walk_in'; }); // online_order
   if(!filtered.length){ list.innerHTML = '<p class="empty">No orders in this category yet.</p>'; return; }
 
   // fit as many order cards as the screen height allows

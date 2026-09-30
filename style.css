@@ -219,3 +219,18 @@ tr.editing .prod-input{background:var(--surface);border-color:var(--accent)}
 .prod-table td{overflow:hidden}
 .prod-table td input.prod-input{text-overflow:ellipsis}
 .prod-table td input[data-f="name"]{font-weight:600}
+
+/* product thumbnail + name cell */
+.prod-name-cell{display:flex;align-items:center;gap:10px}
+.prod-thumb{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--surface2)}
+.prod-thumb-empty{border:1px dashed var(--line)}
+.prod-preview{max-width:120px;max-height:120px;border-radius:10px;object-fit:cover;border:1px solid var(--line)}
+
+/* pagination */
+.pager{display:flex;align-items:center;justify-content:center;gap:14px;margin:18px 0 4px}
+
+/* activity log */
+.activity-table{width:100%;border-collapse:collapse}
+.activity-table th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:10px 12px;background:var(--surface2);white-space:nowrap;position:sticky;top:0}
+.activity-table td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:top;font-size:13px}
+.activity-table tbody tr:hover{background:var(--surface2)}

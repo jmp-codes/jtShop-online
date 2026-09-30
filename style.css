@@ -28,8 +28,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .icon-btn:hover{background:var(--surface2)}
 
 .site-header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line)}
-.brand{font-family:var(--display);font-weight:700;font-size:20px;text-decoration:none;color:var(--ink)}
+.brand{font-family:var(--display);font-weight:700;font-size:20px;text-decoration:none;color:var(--ink);display:flex;align-items:center;gap:8px}
 .brand span{color:var(--accent)}
+.brand-icon{width:28px;height:28px;flex-shrink:0}
 .site-nav{display:flex;gap:18px;margin-right:auto;font-weight:600;font-size:14px}
 .site-nav a{text-decoration:none;color:var(--muted)}
 .site-nav a.active{color:var(--ink)}

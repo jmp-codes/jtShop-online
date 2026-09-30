@@ -356,12 +356,12 @@ function renderCheckout(){
 }
 function renderCheckoutForm(ids, zones){
   var app = $('app');
-  var itemsTotal=0, anyPreorder=false, lines = ids.map(function(id){
-    var p=productById(id), qty=state.cart[id], sub=p.price*qty; itemsTotal+=sub;
-    var preorderQty = Math.max(0, qty - p.stock_qty);
-    if(preorderQty>0) anyPreorder = true;
-    return '<div class="cart-line"><div class="name">'+esc(p.name)+' × '+qty+(preorderQty>0?' <span class="preorder-tag">'+(preorderQty===qty?'Pre-order':preorderQty+' pre-order')+'</span>':'')+'</div><div>'+peso.format(sub)+'</div></div>';
-  }).join('');
+  var itemsTotal=0, anyPreorder=false;
+  ids.forEach(function(id){
+    var p=productById(id), qty=state.cart[id];
+    itemsTotal += p.price*qty;
+    if(qty > p.stock_qty) anyPreorder = true;
+  });
 
   function zoneFee(name){
     var z = zones.find(function(x){return x.barangay===name});
@@ -404,13 +404,48 @@ function renderCheckoutForm(ids, zones){
         '</form>'+
         '<p class="msg" id="checkout-msg"></p>'+
       '</div>'+
-      '<div class="card-section">'+
-        '<h2>Order summary</h2>'+lines+
-        '<div class="cart-line"><div>Delivery fee</div><div id="delivery-fee-line">'+(savedBarangay?peso.format(deliveryFee):'—')+'</div></div>'+
-        '<div class="cart-total" style="margin-top:10px"><span>Total</span><strong id="checkout-total">'+peso.format(itemsTotal+deliveryFee)+'</strong></div>'+
-        (anyPreorder?'<p class="helper" style="margin-top:10px">Items marked <span class="preorder-tag">Pre-order</span> aren\'t in stock yet — we\'ll deliver those once restocked.</p>':'')+
+      '<div class="card-section checkout-summary">'+
+        '<h2>Order summary</h2>'+
+        '<div id="summary-items"></div>'+
+        '<div id="summary-pager"></div>'+
+        '<div class="summary-footer">'+
+          '<div class="cart-line"><div>Delivery fee</div><div id="delivery-fee-line">'+(savedBarangay?peso.format(deliveryFee):'—')+'</div></div>'+
+          '<div class="cart-total" style="margin-top:10px"><span>Total</span><strong id="checkout-total">'+peso.format(itemsTotal+deliveryFee)+'</strong></div>'+
+          (anyPreorder?'<p class="helper" style="margin-top:10px">Items marked <span class="preorder-tag">Pre-order</span> aren\'t in stock yet — we\'ll deliver those once restocked.</p>':'')+
+        '</div>'+
       '</div>'+
     '</div>';
+
+  var summaryPage = 1;
+  var SUMMARY_PAGE_SIZE = 4;
+  function renderSummaryItems(){
+    var totalPages = Math.max(1, Math.ceil(ids.length/SUMMARY_PAGE_SIZE));
+    summaryPage = Math.min(Math.max(1,summaryPage), totalPages);
+    var start = (summaryPage-1)*SUMMARY_PAGE_SIZE;
+    var pageIds = ids.slice(start, start+SUMMARY_PAGE_SIZE);
+    $('summary-items').innerHTML = pageIds.map(function(id){
+      var p=productById(id), qty=state.cart[id], sub=p.price*qty;
+      var preorderQty = Math.max(0, qty - p.stock_qty);
+      return '<div class="cart-line">'+
+        '<div class="cart-line-thumb">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'🧴')+'</div>'+
+        '<div class="cart-line-info"><div class="name">'+esc(p.name)+' × '+qty+'</div>'+
+          (preorderQty>0?'<div class="preorder-tag">'+(preorderQty===qty?'Pre-order':preorderQty+' pre-order')+'</div>':'')+
+        '</div>'+
+        '<div class="sub" style="min-width:64px;text-align:right">'+peso.format(sub)+'</div>'+
+      '</div>';
+    }).join('');
+    $('summary-pager').innerHTML = totalPages>1
+      ? '<div class="pager">'+
+          '<button type="button" class="btn btn-ghost btn-sm" id="summary-prev"'+(summaryPage<=1?' disabled':'')+'>&larr; Prev</button>'+
+          '<span class="helper">Page '+summaryPage+' of '+totalPages+'</span>'+
+          '<button type="button" class="btn btn-ghost btn-sm" id="summary-next"'+(summaryPage>=totalPages?' disabled':'')+'>Next &rarr;</button>'+
+        '</div>'
+      : '';
+    var prevBtn=$('summary-prev'), nextBtn=$('summary-next');
+    if(prevBtn) prevBtn.addEventListener('click', function(){ summaryPage--; renderSummaryItems(); });
+    if(nextBtn) nextBtn.addEventListener('click', function(){ summaryPage++; renderSummaryItems(); });
+  }
+  renderSummaryItems();
 
   function updateTotals(){
     var fee = zoneFee($('c-barangay').value);

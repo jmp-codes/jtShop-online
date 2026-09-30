@@ -137,6 +137,9 @@ td input,td select{min-height:36px;padding:6px 8px}
 .cart-line .sub{font-size:12px;color:var(--muted)}
 .empty{text-align:center;color:var(--muted);padding:40px 16px}
 
+.checkout-summary{display:flex;flex-direction:column}
+.checkout-summary .summary-footer{margin-top:auto;padding-top:6px}
+
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:99px;font-size:13px;font-weight:600;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.2)}
 
 @media (max-width:600px){

@@ -56,11 +56,18 @@ function logActivity(action, details){
 }
 
 /* ---------------- gate + boot ---------------- */
+function hidePageLoader(){
+  var el = $('page-loader');
+  if(!el) return;
+  el.classList.add('hide');
+  setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 400);
+}
 function boot(){
   sb.auth.getSession().then(function(r){
     var session = r.data.session;
     if(!session){
       $('app').innerHTML = '<p class="empty">Sign in with an admin account to view this page. <a href="index.html#/login">Sign in</a></p>';
+      hidePageLoader();
       return;
     }
     sb.from('shop_profiles').select('*').eq('id',session.user.id).single().then(function(r){
@@ -69,11 +76,12 @@ function boot(){
       var sob=$('signout-btn'); if(sob) sob.addEventListener('click', function(){ sb.auth.signOut().then(function(){ location.href='index.html'; }); });
       if(!profile || profile.role!=='admin'){
         $('app').innerHTML = '<p class="empty">This account is not an admin. <a href="index.html">Back to shop</a></p>';
+        hidePageLoader();
         return;
       }
       initTabs();
     });
-  });
+  }).catch(function(){ hidePageLoader(); });
 }
 function initTabs(){
   document.querySelectorAll('.tabs button').forEach(function(b){
@@ -95,7 +103,8 @@ function showTab(tab){
     else if(tab==='orders') renderOrders(body);
     else if(tab==='activity') renderActivityLog(body);
     else renderProducts(body);
-  }).catch(function(e){ body.innerHTML = errBox(e); });
+    hidePageLoader();
+  }).catch(function(e){ body.innerHTML = errBox(e); hidePageLoader(); });
 }
 var resizeTimer = null;
 window.addEventListener('resize', function(){

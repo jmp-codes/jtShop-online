@@ -395,6 +395,12 @@ function orderCard(adminView, o){
 function errBox(e){ return '<p class="msg err">Something went wrong: '+esc(e.message||e)+'</p>'; }
 
 /* ---------------- boot ---------------- */
+function hidePageLoader(){
+  var el = $('page-loader');
+  if(!el) return;
+  el.classList.add('hide');
+  setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 400);
+}
 window.addEventListener('hashchange', route);
 loadCart(); renderCartBadge();
 
@@ -405,12 +411,16 @@ loadCart(); renderCartBadge();
 var looksLikeAuthRedirect = /access_token=|type=recovery|error_description=/.test(location.hash);
 if(looksLikeAuthRedirect){
   $('app').innerHTML = '<p class="helper" style="text-align:center;margin-top:40px">Verifying your link…</p>';
+  hidePageLoader();
 } else {
   sb.auth.getSession().then(function(r){
     state.session = r.data.session;
     return refreshProfile();
   }).then(function(){
     route();
+    hidePageLoader();
+  }).catch(function(){
+    hidePageLoader();
   });
 }
 sb.auth.onAuthStateChange(function(event, session){

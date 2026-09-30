@@ -236,12 +236,33 @@ function renderLogin(signup){
     task.then(function(r){
       if(r.error){ msg.textContent=r.error.message; msg.className='msg err'; return; }
       if(signup && !r.data.session){
-        msg.textContent='Account created. Check your email to confirm, then sign in.'; msg.className='msg ok';
+        showSignupSuccess(email);
         return;
       }
       location.hash = '#/';
     });
   });
+}
+
+function showSignupSuccess(email){
+  var card = document.querySelector('.auth-card');
+  if(!card) return;
+  card.classList.add('auth-fade-out');
+  setTimeout(function(){
+    card.innerHTML =
+      '<div class="auth-success">'+
+        '<div class="success-check"><svg viewBox="0 0 52 52"><circle class="success-check-circle" cx="26" cy="26" r="24" fill="none"/><path class="success-check-mark" fill="none" d="M14.5 27l7 7 16-16"/></svg></div>'+
+        '<h2 style="text-align:center">Account created!</h2>'+
+        '<p class="helper" style="text-align:center">We sent a confirmation link to<br><strong>'+esc(email)+'</strong>.<br>Verify it, then sign in below.</p>'+
+        '<a href="#/login" class="btn btn-primary wide" style="text-decoration:none;display:block;text-align:center;box-sizing:border-box">Go to sign in</a>'+
+        '<p class="helper" style="text-align:center;margin-top:10px">Redirecting you automatically…</p>'+
+      '</div>';
+    card.classList.remove('auth-fade-out');
+    card.classList.add('auth-fade-in');
+  }, 200);
+  setTimeout(function(){
+    if(location.hash.replace(/^#/,'')==='/signup'){ location.hash = '#/login'; }
+  }, 4500);
 }
 
 function renderForgot(){

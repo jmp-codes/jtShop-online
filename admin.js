@@ -300,7 +300,7 @@ function renderProducts(body){
     '</div>'+
     '<div class="tbl-wrap"><table class="prod-table"><colgroup>'+
       '<col class="col-name"><col class="col-num"><col class="col-num"><col class="col-active"><col class="col-save">'+
-    '</colgroup><thead><tr><th>Name</th><th>Price</th><th>Stock</th><th>Active</th><th></th></tr></thead><tbody id="prod-body"></tbody></table></div>';
+    '</colgroup><thead><tr><th>Name</th><th>Price</th><th>Stock</th><th>Active</th><th>Actions</th></tr></thead><tbody id="prod-body"></tbody></table></div>';
   $('prod-body').innerHTML = products.map(function(p){
     var thumb = p.image_url
       ? '<img src="'+esc(p.image_url)+'" alt="" class="prod-thumb" onerror="this.style.visibility=\'hidden\'">'

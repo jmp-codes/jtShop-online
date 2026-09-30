@@ -162,6 +162,18 @@ td input,td select{min-height:36px;padding:6px 8px}
 .auth-card{max-width:400px;width:100%}
 .auth-mark{width:52px;height:52px;border-radius:14px;background:linear-gradient(155deg,var(--accent),#5b21b6);color:#fff;font-family:var(--display);font-weight:700;font-size:20px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;box-shadow:0 6px 16px -4px rgba(124,58,237,.45)}
 
+.auth-card{transition:opacity .2s ease, transform .2s ease}
+.auth-card.auth-fade-out{opacity:0;transform:translateY(6px) scale(.98)}
+.auth-card.auth-fade-in{animation:auth-fade-in .35s ease}
+@keyframes auth-fade-in{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.auth-success{display:flex;flex-direction:column;align-items:center;gap:4px}
+.success-check{width:64px;height:64px;margin:0 auto 14px}
+.success-check svg{width:100%;height:100%}
+.success-check-circle{stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-dasharray:151;stroke-dashoffset:151;animation:success-circle .45s ease forwards}
+.success-check-mark{stroke:var(--accent);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:36;stroke-dashoffset:36;animation:success-mark .3s ease forwards .4s}
+@keyframes success-circle{to{stroke-dashoffset:0}}
+@keyframes success-mark{to{stroke-dashoffset:0}}
+
 /* general polish */
 .card,.card-section,.drawer-panel,.order-card,.stat-tile{box-shadow:0 1px 2px rgba(20,10,40,.04)}
 .card{transition:transform .15s ease, box-shadow .15s ease}
@@ -205,6 +217,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 .prod-table .col-num{width:15%}
 .prod-table .col-active{width:9%}
 .prod-table .col-save{width:21%}
+.prod-table th:nth-child(1),.prod-table td:nth-child(1){text-align:left}
+.prod-table th:nth-child(2),.prod-table td:nth-child(2){text-align:center}
+.prod-table th:nth-child(3),.prod-table td:nth-child(3){text-align:center}
+.prod-table th:nth-child(4),.prod-table td:nth-child(4){text-align:center}
+.prod-table th:nth-child(5){text-align:right}
 
 /* read-only vs editing state */
 .prod-input:disabled{background:transparent;border-color:transparent;color:var(--ink);cursor:default;box-shadow:none}

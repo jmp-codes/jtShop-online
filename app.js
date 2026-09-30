@@ -138,7 +138,7 @@ function renderShop(){
   fetchProducts().then(function(){
     var app = $('app');
     app.innerHTML =
-      '<div class="hero"><h1>Baby care, delivered</h1><p>Everything in stock right now — order what you need, we confirm and deliver.</p></div>'+
+      '<div class="hero"><h1>Shop jT</h1><p>Everything in stock right now — order what you need, we confirm and deliver.</p></div>'+
       '<div class="grid" id="product-grid"></div>';
     var grid = $('product-grid');
     if(!state.products.length){
@@ -166,7 +166,7 @@ function productCard(p){
   var cls = p.stock_qty<=0?'zero':(p.stock_qty<=3?'low':'ok');
   var stockText = p.stock_qty<=0 ? 'Out of stock — pre-order available' : (p.stock_qty<=3 ? 'Only '+p.stock_qty+' left' : p.stock_qty+' in stock');
   return '<div class="card">'+
-    '<div class="card-media">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'🧴')+'</div>'+
+    '<div class="card-media">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'📦')+'</div>'+
     '<div class="card-body">'+
       '<div class="card-name">'+esc(p.name)+'</div>'+
       (p.description?'<div class="card-desc">'+esc(p.description)+'</div>':'<div class="card-desc"></div>')+
@@ -192,7 +192,7 @@ function renderCartDrawer(){
     var sub = p.price*qty; total += sub;
     var preorderQty = Math.max(0, qty - p.stock_qty);
     return '<div class="cart-line">'+
-      '<div class="cart-line-thumb">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'🧴')+'</div>'+
+      '<div class="cart-line-thumb">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'📦')+'</div>'+
       '<div class="cart-line-info"><div class="name">'+esc(p.name)+'</div><div class="sub">'+peso.format(p.price)+' each</div>'+
         (preorderQty>0?'<div class="preorder-tag">'+(preorderQty===qty?'Pre-order':'Pre-order '+preorderQty+' of '+qty)+'</div>':'')+
       '</div>'+
@@ -427,7 +427,7 @@ function renderCheckoutForm(ids, zones){
       var p=productById(id), qty=state.cart[id], sub=p.price*qty;
       var preorderQty = Math.max(0, qty - p.stock_qty);
       return '<div class="cart-line">'+
-        '<div class="cart-line-thumb">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'🧴')+'</div>'+
+        '<div class="cart-line-thumb">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'📦')+'</div>'+
         '<div class="cart-line-info"><div class="name">'+esc(p.name)+' × '+qty+'</div>'+
           (preorderQty>0?'<div class="preorder-tag">'+(preorderQty===qty?'Pre-order':preorderQty+' pre-order')+'</div>':'')+
         '</div>'+

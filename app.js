@@ -26,6 +26,7 @@ var state = {
   profile: null,       // {id, full_name, role, ...}
   products: [],         // active products (customer view)
   adminProducts: [],    // all products (admin view)
+  deliveryZones: null,  // barangay -> fee lookup, loaded once per session
   cart: {}              // {product_id: qty}
 };
 
@@ -76,6 +77,11 @@ function fetchAdminProducts(){
 function productById(id){
   return state.products.find(function(p){return p.id===id}) ||
          state.adminProducts.find(function(p){return p.id===id});
+}
+function fetchDeliveryZones(){
+  if(state.deliveryZones) return Promise.resolve(state.deliveryZones);
+  return sb.from('shop_delivery_zones').select('*').order('sort_order')
+    .then(function(r){ if(r.error) throw r.error; state.deliveryZones = r.data||[]; return state.deliveryZones; });
 }
 
 /* ---------------- auth ---------------- */
@@ -346,20 +352,41 @@ function renderCheckout(){
   var app = $('app');
   var ids = Object.keys(state.cart).filter(function(id){return state.cart[id]>0});
   if(!ids.length){ app.innerHTML = '<p class="empty">Your cart is empty. <a href="#/">Go shopping</a></p>'; return; }
-  var total=0, anyPreorder=false, lines = ids.map(function(id){
-    var p=productById(id), qty=state.cart[id], sub=p.price*qty; total+=sub;
+  fetchDeliveryZones().then(function(zones){ renderCheckoutForm(ids, zones); }).catch(function(e){ app.innerHTML = errBox(e); });
+}
+function renderCheckoutForm(ids, zones){
+  var app = $('app');
+  var itemsTotal=0, anyPreorder=false, lines = ids.map(function(id){
+    var p=productById(id), qty=state.cart[id], sub=p.price*qty; itemsTotal+=sub;
     var preorderQty = Math.max(0, qty - p.stock_qty);
     if(preorderQty>0) anyPreorder = true;
     return '<div class="cart-line"><div class="name">'+esc(p.name)+' × '+qty+(preorderQty>0?' <span class="preorder-tag">'+(preorderQty===qty?'Pre-order':preorderQty+' pre-order')+'</span>':'')+'</div><div>'+peso.format(sub)+'</div></div>';
   }).join('');
+
+  function zoneFee(name){
+    var z = zones.find(function(x){return x.barangay===name});
+    return (z && z.serviceable) ? Number(z.fee)||0 : 0;
+  }
+  var savedProfile = state.profile || {};
+  var savedBarangay = zones.some(function(z){return z.barangay===savedProfile.barangay && z.serviceable}) ? savedProfile.barangay : '';
+  var deliveryFee = zoneFee(savedBarangay);
+
+  var barangayOptions = '<option value="">Select your barangay…</option>' + zones.map(function(z){
+    var label = z.serviceable
+      ? z.barangay+' ('+z.km_range+') — '+(Number(z.fee)>0?peso.format(z.fee):'Free')
+      : z.barangay+' — Unserviceable';
+    return '<option value="'+esc(z.barangay)+'"'+(z.serviceable?'':' disabled')+(z.barangay===savedBarangay?' selected':'')+'>'+esc(label)+'</option>';
+  }).join('');
+
   app.innerHTML =
     '<h1>Checkout</h1>'+
     '<div class="split">'+
       '<div class="card-section">'+
         '<h2>Delivery details</h2>'+
         '<form id="checkout-form" class="form-grid">'+
-          '<label class="wide">Full address<textarea id="c-address" required placeholder="House/unit, street, barangay, city"></textarea></label>'+
-          '<label class="wide">Contact number<input id="c-phone" required placeholder="09xx xxx xxxx"></label>'+
+          '<label class="wide">Full address<textarea id="c-address" required placeholder="House/unit, street, barangay, city">'+esc(savedProfile.address||'')+'</textarea></label>'+
+          '<label class="wide">Barangay<select id="c-barangay" required>'+barangayOptions+'</select></label>'+
+          '<label class="wide">Contact number<input id="c-phone" required placeholder="09xx xxx xxxx" value="'+esc(savedProfile.phone||'')+'"></label>'+
           '<label class="wide">Payment method'+
             '<select id="c-payment">'+
               '<option value="cod">Cash on delivery</option>'+
@@ -369,7 +396,7 @@ function renderCheckout(){
           '<div class="wide gcash-panel" id="gcash-panel" hidden>'+
             '<img src="gcash-qr.png" alt="GCash QR code — tap to enlarge" class="gcash-qr" id="gcash-qr-img">'+
             '<div class="helper" style="margin:4px 0 8px">Tap the QR to enlarge</div>'+
-            '<p class="helper" style="margin:8px 0">Scan the QR above in your GCash app, send <strong>'+peso.format(total)+'</strong>, then enter the reference number from your GCash receipt below.</p>'+
+            '<p class="helper" style="margin:8px 0">Scan the QR above in your GCash app, send <strong id="gcash-amount">'+peso.format(itemsTotal+deliveryFee)+'</strong>, then enter the reference number from your GCash receipt below.</p>'+
             '<label class="wide">GCash reference number<input id="c-gcash-ref" placeholder="e.g. 1234567890123"></label>'+
           '</div>'+
           '<label class="wide">Notes (optional)<textarea id="c-notes" placeholder="Landmark, preferred delivery time, etc."></textarea></label>'+
@@ -379,10 +406,20 @@ function renderCheckout(){
       '</div>'+
       '<div class="card-section">'+
         '<h2>Order summary</h2>'+lines+
-        '<div class="cart-total" style="margin-top:10px"><span>Total</span><strong>'+peso.format(total)+'</strong></div>'+
+        '<div class="cart-line"><div>Delivery fee</div><div id="delivery-fee-line">'+(savedBarangay?peso.format(deliveryFee):'—')+'</div></div>'+
+        '<div class="cart-total" style="margin-top:10px"><span>Total</span><strong id="checkout-total">'+peso.format(itemsTotal+deliveryFee)+'</strong></div>'+
         (anyPreorder?'<p class="helper" style="margin-top:10px">Items marked <span class="preorder-tag">Pre-order</span> aren\'t in stock yet — we\'ll deliver those once restocked.</p>':'')+
       '</div>'+
     '</div>';
+
+  function updateTotals(){
+    var fee = zoneFee($('c-barangay').value);
+    $('delivery-fee-line').textContent = $('c-barangay').value ? peso.format(fee) : '—';
+    var total = itemsTotal + fee;
+    $('checkout-total').textContent = peso.format(total);
+    var amt = $('gcash-amount'); if(amt) amt.textContent = peso.format(total);
+  }
+  $('c-barangay').addEventListener('change', updateTotals);
   $('c-payment').addEventListener('change', function(){
     $('gcash-panel').hidden = $('c-payment').value !== 'online';
   });
@@ -390,6 +427,12 @@ function renderCheckout(){
   $('checkout-form').addEventListener('submit', function(ev){
     ev.preventDefault();
     var msg=$('checkout-msg');
+    var barangay = $('c-barangay').value;
+    var zone = zones.find(function(z){return z.barangay===barangay});
+    if(!barangay || !zone || !zone.serviceable){
+      msg.textContent = 'Select a barangay we currently deliver to.'; msg.className='msg err';
+      return;
+    }
     var payment = $('c-payment').value;
     var gcashRef = $('c-gcash-ref') ? $('c-gcash-ref').value.trim() : '';
     if(payment==='online' && !gcashRef){
@@ -398,16 +441,20 @@ function renderCheckout(){
     }
     msg.textContent='Placing your order…'; msg.className='msg';
     var items = ids.map(function(id){ return {product_id:id, qty: state.cart[id]}; });
+    var addressVal = $('c-address').value.trim(), phoneVal = $('c-phone').value.trim();
     sb.rpc('shop_place_order', {
-      p_deliver_to: $('c-address').value.trim(),
-      p_phone: $('c-phone').value.trim(),
+      p_deliver_to: addressVal,
+      p_phone: phoneVal,
       p_payment_method: payment,
       p_notes: $('c-notes').value.trim() || null,
       p_items: items,
-      p_payment_reference: payment==='online' ? gcashRef : null
+      p_payment_reference: payment==='online' ? gcashRef : null,
+      p_barangay: barangay
     }).then(function(r){
       if(r.error){ msg.textContent = r.error.message.replace(/^.*?:\s*/,''); msg.className='msg err'; return; }
       state.cart = {}; saveCart();
+      // keep the local profile cache in sync so the next checkout pre-fills instantly
+      if(state.profile){ state.profile.address = addressVal; state.profile.phone = phoneVal; state.profile.barangay = barangay; }
       toast('Order placed!');
       location.hash = '#/orders';
     });
@@ -446,7 +493,8 @@ function orderCard(adminView, o){
       '<div><span class="pill '+o.status+'">'+o.status.replace(/_/g,' ')+'</span> <span class="pill '+o.payment_status+'">'+o.payment_status+'</span>'+(o.has_preorder?' <span class="pill preorder">Pre-order</span>':'')+'</div>'+
     '</div>'+
     '<div class="order-items">'+items+'</div>'+
-    '<div class="order-items">Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; '+esc(o.notes):'')+'</div>'+
+    '<div class="order-items">Deliver to: '+esc(o.deliver_to)+(o.barangay?' ('+esc(o.barangay)+')':'')+' &middot; '+esc(o.phone)+(o.notes?' &middot; '+esc(o.notes):'')+'</div>'+
+    (Number(o.delivery_fee)>0 ? '<div class="order-items">Delivery fee: '+peso.format(o.delivery_fee)+'</div>' : '')+
     (o.payment_method==='online' ? '<div class="order-items">Paid via GCash'+(o.payment_reference?' &middot; Ref #'+esc(o.payment_reference):'')+'</div>' : '')+
     (!adminView && o.status==='pending' ? '<div style="margin-top:10px"><button class="btn btn-danger btn-sm" data-cancel="'+o.id+'">Cancel order</button></div>' : '')+
   '</div>';

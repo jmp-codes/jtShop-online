@@ -37,18 +37,21 @@ document.addEventListener('keydown', function(ev){ if(ev.key==='Escape') closeMo
 var products = [];
 var orders = [];
 var activity = [];
+var deliveryZones = [];
 
 function loadAll(){
   return Promise.all([
     sb.from('shop_products').select('*').order('name'),
     sb.from('shop_orders').select('*, shop_order_items(*), shop_profiles(full_name)').order('created_at',{ascending:false}),
-    sb.from('shop_activity_log').select('*, shop_profiles!shop_activity_log_actor_profile_fkey(full_name)').order('created_at',{ascending:false}).limit(300)
+    sb.from('shop_activity_log').select('*, shop_profiles!shop_activity_log_actor_profile_fkey(full_name)').order('created_at',{ascending:false}).limit(300),
+    sb.from('shop_delivery_zones').select('*').order('sort_order')
   ]).then(function(r){
     if(r[0].error) throw r[0].error;
     if(r[1].error) throw r[1].error;
     products = r[0].data||[];
     orders = r[1].data||[];
     activity = (r[2] && !r[2].error) ? (r[2].data||[]) : [];
+    deliveryZones = (r[3] && !r[3].error) ? (r[3].data||[]) : [];
   });
 }
 function logActivity(action, details){
@@ -102,6 +105,7 @@ function showTab(tab){
     if(tab==='dashboard') renderDashboard(body);
     else if(tab==='orders') renderOrders(body);
     else if(tab==='activity') renderActivityLog(body);
+    else if(tab==='delivery') renderDelivery(body);
     else renderProducts(body);
     hidePageLoader();
   }).catch(function(e){ body.innerHTML = errBox(e); hidePageLoader(); });
@@ -273,7 +277,8 @@ function renderOrders(body){
     var buyer = isWalkin ? 'Walk-in sale' : ((o.shop_profiles && o.shop_profiles.full_name) || 'Customer');
     var meta = isWalkin
       ? (o.notes ? 'Note: '+esc(o.notes) : 'In-person sale')
-      : 'Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; Note: '+esc(o.notes):'')+' &middot; '+o.payment_method.toUpperCase()+
+      : 'Deliver to: '+esc(o.deliver_to)+(o.barangay?' ('+esc(o.barangay)+')':'')+' &middot; '+esc(o.phone)+(o.notes?' &middot; Note: '+esc(o.notes):'')+' &middot; '+o.payment_method.toUpperCase()+
+        (Number(o.delivery_fee)>0 ? ' &middot; Delivery '+peso.format(o.delivery_fee) : '')+
         (o.payment_method==='online' && o.payment_reference ? ' &middot; <strong>GCash ref: '+esc(o.payment_reference)+'</strong>' : '');
     return '<div class="order-card">'+
       '<div class="order-main">'+
@@ -521,6 +526,115 @@ function openAddStockModal(id){
   });
 }
 
+/* ---------------- delivery zones ---------------- */
+function renderDelivery(body){
+  body.innerHTML =
+    '<div class="admin-topbar" style="margin-bottom:14px">'+
+      '<h2 style="margin:0">Delivery fees &middot; '+deliveryZones.length+' '+(deliveryZones.length===1?'barangay':'barangays')+'</h2>'+
+      '<button class="btn btn-primary" id="open-add-zone">+ Add barangay</button>'+
+    '</div>'+
+    '<p class="helper" style="margin-top:-8px">Set the delivery fee customers pay at checkout per barangay. Uncheck "Serviceable" for areas you don\'t deliver to yet.</p>'+
+    '<div class="tbl-wrap"><table class="prod-table"><colgroup>'+
+      '<col class="col-name"><col class="col-num"><col class="col-num"><col class="col-active"><col class="col-save">'+
+    '</colgroup><thead><tr><th>Barangay</th><th>Km range</th><th>Fee</th><th>Serviceable</th><th>Actions</th></tr></thead><tbody id="zone-body"></tbody></table></div>';
+
+  $('zone-body').innerHTML = deliveryZones.map(function(z){
+    return '<tr data-row="'+z.id+'">'+
+      '<td><strong>'+esc(z.barangay)+'</strong></td>'+
+      '<td><input data-km="'+z.id+'" value="'+esc(z.km_range)+'" style="width:100px"></td>'+
+      '<td><input data-fee="'+z.id+'" type="number" min="0" step="1" value="'+(z.fee==null?'':z.fee)+'" style="width:80px" '+(z.serviceable?'':'disabled placeholder="—"')+'></td>'+
+      '<td style="text-align:center"><input type="checkbox" data-serviceable="'+z.id+'" '+(z.serviceable?'checked':'')+'></td>'+
+      '<td class="row-actions"><div class="row-actions-btns">'+
+        '<button class="btn btn-ghost btn-sm" data-save-zone="'+z.id+'">Save</button>'+
+        '<button class="btn btn-danger btn-sm" data-remove-zone="'+z.id+'">Remove</button>'+
+      '</div></td>'+
+    '</tr>';
+  }).join('');
+
+  $('zone-body').querySelectorAll('[data-serviceable]').forEach(function(cb){
+    cb.addEventListener('change', function(){
+      var row = cb.closest('tr');
+      var feeInput = row.querySelector('[data-fee]');
+      feeInput.disabled = !cb.checked;
+    });
+  });
+  $('zone-body').querySelectorAll('[data-save-zone]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-save-zone');
+      var row = btn.closest('tr');
+      var serviceable = row.querySelector('[data-serviceable]').checked;
+      var km = row.querySelector('[data-km]').value.trim();
+      var feeVal = row.querySelector('[data-fee]').value;
+      var fee = serviceable ? (parseFloat(feeVal)||0) : null;
+      btn.disabled = true;
+      sb.from('shop_delivery_zones').update({km_range:km, fee:fee, serviceable:serviceable, updated_at:new Date().toISOString()}).eq('id',id).then(function(r){
+        btn.disabled = false;
+        if(r.error){ toast(r.error.message); return; }
+        var z = deliveryZones.find(function(x){return x.id===id});
+        if(z){ z.km_range=km; z.fee=fee; z.serviceable=serviceable; }
+        toast('Delivery fee updated');
+        logActivity('delivery_zone_updated', {barangay: z?z.barangay:'', fee: fee, serviceable: serviceable});
+      });
+    });
+  });
+  $('zone-body').querySelectorAll('[data-remove-zone]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-remove-zone');
+      var z = deliveryZones.find(function(x){return x.id===id});
+      if(!confirm('Remove '+(z?z.barangay:'this barangay')+' from delivery zones?')) return;
+      sb.from('shop_delivery_zones').delete().eq('id',id).then(function(r){
+        if(r.error){ toast(r.error.message); return; }
+        toast('Barangay removed');
+        logActivity('delivery_zone_removed', {barangay: z?z.barangay:''});
+        showTab('delivery');
+      });
+    });
+  });
+  $('open-add-zone').addEventListener('click', openAddZoneModal);
+}
+function openAddZoneModal(){
+  openModal('Add a barangay',
+    '<form id="new-zone" class="form-grid">'+
+      '<label class="wide">Barangay<input id="nz-name" required autofocus></label>'+
+      '<label>Km range<input id="nz-km" placeholder="e.g. 5-6 km"></label>'+
+      '<label>Fee (₱)<input id="nz-fee" type="number" min="0" step="1" value="0" required></label>'+
+      '<label class="wide" style="flex-direction:row;align-items:center;gap:8px">'+
+        '<input type="checkbox" id="nz-serviceable" checked style="width:auto;min-height:auto"> <span>Serviceable</span>'+
+      '</label>'+
+      '<div class="wide" style="display:flex;gap:10px;justify-content:flex-end">'+
+        '<button type="button" class="btn btn-ghost" id="nz-cancel">Cancel</button>'+
+        '<button class="btn btn-primary" type="submit">Add barangay</button>'+
+      '</div>'+
+    '</form><p class="msg" id="nz-msg"></p>'
+  );
+  $('nz-cancel').addEventListener('click', closeModal);
+  $('nz-name').focus();
+  $('nz-serviceable').addEventListener('change', function(){ $('nz-fee').disabled = !this.checked; });
+  $('new-zone').addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var msg = $('nz-msg');
+    var name = $('nz-name').value.trim();
+    if(!name){ msg.textContent='Enter a barangay name.'; msg.className='msg err'; return; }
+    var serviceable = $('nz-serviceable').checked;
+    var row = {
+      barangay: name,
+      km_range: $('nz-km').value.trim(),
+      fee: serviceable ? (parseFloat($('nz-fee').value)||0) : null,
+      serviceable: serviceable,
+      sort_order: deliveryZones.length
+    };
+    var submitBtn = ev.target.querySelector('button[type=submit]'); submitBtn.disabled = true;
+    sb.from('shop_delivery_zones').insert(row).then(function(r){
+      submitBtn.disabled = false;
+      if(r.error){ msg.textContent = (r.error.code==='23505') ? 'That barangay is already in the list.' : r.error.message; msg.className='msg err'; return; }
+      toast('Barangay added');
+      logActivity('delivery_zone_added', {barangay: name});
+      closeModal();
+      showTab('delivery');
+    });
+  });
+}
+
 /* ---------------- activity log ---------------- */
 var ACTIVITY_LABELS = {
   stock_added: 'Stock added',
@@ -532,7 +646,10 @@ var ACTIVITY_LABELS = {
   product_updated: 'Product updated',
   order_status_changed: 'Order status changed',
   order_payment_changed: 'Payment status changed',
-  preorder_fulfilled: 'Pre-order fulfilled'
+  preorder_fulfilled: 'Pre-order fulfilled',
+  delivery_zone_added: 'Delivery zone added',
+  delivery_zone_updated: 'Delivery zone updated',
+  delivery_zone_removed: 'Delivery zone removed'
 };
 function activityLabel(a){ return ACTIVITY_LABELS[a.action] || a.action; }
 function activityDetails(a){
@@ -558,6 +675,12 @@ function activityDetails(a){
       return 'Order #'+String(d.order_id||'').slice(0,8)+' &rarr; '+esc(d.payment_status||'');
     case 'preorder_fulfilled':
       return esc(d.product_name||'')+' &middot; '+d.qty_fulfilled+' fulfilled for order #'+String(d.order_id||'').slice(0,8)+(d.remaining_preorder?' &middot; '+d.remaining_preorder+' still pending':'');
+    case 'delivery_zone_added':
+      return esc(d.barangay||'');
+    case 'delivery_zone_updated':
+      return esc(d.barangay||'')+' &rarr; '+(d.serviceable?peso.format(d.fee||0):'unserviceable');
+    case 'delivery_zone_removed':
+      return esc(d.barangay||'');
     default:
       return esc(JSON.stringify(d));
   }

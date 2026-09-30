@@ -247,7 +247,8 @@ function renderOrders(body){
     var buyer = isWalkin ? 'Walk-in sale' : ((o.shop_profiles && o.shop_profiles.full_name) || 'Customer');
     var meta = isWalkin
       ? (o.notes ? 'Note: '+esc(o.notes) : 'In-person sale')
-      : 'Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; Note: '+esc(o.notes):'')+' &middot; '+o.payment_method.toUpperCase();
+      : 'Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; Note: '+esc(o.notes):'')+' &middot; '+o.payment_method.toUpperCase()+
+        (o.payment_method==='online' && o.payment_reference ? ' &middot; <strong>GCash ref: '+esc(o.payment_reference)+'</strong>' : '');
     return '<div class="order-card">'+
       '<div class="order-main">'+
         '<div class="order-head"><div><strong>'+esc(buyer)+'</strong>'+(isWalkin?' <span class="pill" style="background:var(--accent-soft);color:var(--accent)">Walk-in</span>':'')+' · '+peso.format(o.total)+' · <span class="helper">'+new Date(o.created_at).toLocaleString('en-PH')+'</span></div></div>'+

@@ -232,6 +232,10 @@ tr.editing .prod-input{background:var(--surface);border-color:var(--accent)}
 .row-actions{text-align:right}
 .row-actions-btns{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 
+/* GCash manual payment panel */
+.gcash-panel{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:14px;margin:-2px 0 2px;text-align:center}
+.gcash-qr{width:180px;max-width:100%;border-radius:10px;border:1px solid var(--line);background:#fff}
+
 /* stock adjustment modal */
 .seg-control{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .seg-opt{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 10px;font-size:13px;font-weight:600;cursor:pointer;background:var(--surface);color:var(--muted);text-align:center}

@@ -346,9 +346,14 @@ function renderCheckout(){
           '<label class="wide">Payment method'+
             '<select id="c-payment">'+
               '<option value="cod">Cash on delivery</option>'+
-              '<option value="online" disabled>Online payment — coming soon</option>'+
+              '<option value="online">GCash</option>'+
             '</select>'+
           '</label>'+
+          '<div class="wide gcash-panel" id="gcash-panel" hidden>'+
+            '<img src="gcash-qr.png" alt="GCash QR code" class="gcash-qr">'+
+            '<p class="helper" style="margin:8px 0">Scan the QR above in your GCash app, send <strong>'+peso.format(total)+'</strong>, then enter the reference number from your GCash receipt below.</p>'+
+            '<label class="wide">GCash reference number<input id="c-gcash-ref" placeholder="e.g. 1234567890123"></label>'+
+          '</div>'+
           '<label class="wide">Notes (optional)<textarea id="c-notes" placeholder="Landmark, preferred delivery time, etc."></textarea></label>'+
           '<button class="btn btn-primary wide" type="submit">Place order</button>'+
         '</form>'+
@@ -359,16 +364,27 @@ function renderCheckout(){
         '<div class="cart-total" style="margin-top:10px"><span>Total</span><strong>'+peso.format(total)+'</strong></div>'+
       '</div>'+
     '</div>';
+  $('c-payment').addEventListener('change', function(){
+    $('gcash-panel').hidden = $('c-payment').value !== 'online';
+  });
   $('checkout-form').addEventListener('submit', function(ev){
     ev.preventDefault();
-    var msg=$('checkout-msg'); msg.textContent='Placing your order…'; msg.className='msg';
+    var msg=$('checkout-msg');
+    var payment = $('c-payment').value;
+    var gcashRef = $('c-gcash-ref') ? $('c-gcash-ref').value.trim() : '';
+    if(payment==='online' && !gcashRef){
+      msg.textContent='Enter your GCash reference number.'; msg.className='msg err';
+      return;
+    }
+    msg.textContent='Placing your order…'; msg.className='msg';
     var items = ids.map(function(id){ return {product_id:id, qty: state.cart[id]}; });
     sb.rpc('shop_place_order', {
       p_deliver_to: $('c-address').value.trim(),
       p_phone: $('c-phone').value.trim(),
-      p_payment_method: $('c-payment').value,
+      p_payment_method: payment,
       p_notes: $('c-notes').value.trim() || null,
-      p_items: items
+      p_items: items,
+      p_payment_reference: payment==='online' ? gcashRef : null
     }).then(function(r){
       if(r.error){ msg.textContent = r.error.message.replace(/^.*?:\s*/,''); msg.className='msg err'; return; }
       state.cart = {}; saveCart();
@@ -409,6 +425,7 @@ function orderCard(adminView, o){
     '</div>'+
     '<div class="order-items">'+esc(items)+'</div>'+
     '<div class="order-items">Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; '+esc(o.notes):'')+'</div>'+
+    (o.payment_method==='online' ? '<div class="order-items">Paid via GCash'+(o.payment_reference?' &middot; Ref #'+esc(o.payment_reference):'')+'</div>' : '')+
     (!adminView && o.status==='pending' ? '<div style="margin-top:10px"><button class="btn btn-danger btn-sm" data-cancel="'+o.id+'">Cancel order</button></div>' : '')+
   '</div>';
 }

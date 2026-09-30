@@ -435,14 +435,18 @@ function openEditProductModal(id){
 function openAddStockModal(id){
   var p = products.find(function(x){return x.id===id});
   if(!p) return;
-  openModal('Add stock — '+p.name,
+  openModal('Adjust stock — '+p.name,
     '<p class="helper" style="margin-top:0">Current stock: <strong>'+p.stock_qty+'</strong></p>'+
-    '<label>Quantity to add<input id="as-qty" type="number" min="1" step="1" value="1" required autofocus></label>'+
-    '<label style="margin-top:10px">Reason / note (optional)<input id="as-reason" placeholder="e.g. Restock from supplier"></label>'+
+    '<div class="seg-control" style="margin-bottom:12px">'+
+      '<label class="seg-opt"><input type="radio" name="as-dir" value="add" checked> Add stock</label>'+
+      '<label class="seg-opt"><input type="radio" name="as-dir" value="remove"> Correct / remove stock</label>'+
+    '</div>'+
+    '<label>Quantity<input id="as-qty" type="number" min="1" step="1" value="1" required autofocus></label>'+
+    '<label style="margin-top:10px">Reason / note<input id="as-reason" placeholder="e.g. Restock from supplier, or Miscounted / damaged item"></label>'+
     '<p class="msg" id="as-msg"></p>'+
     '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">'+
       '<button type="button" class="btn btn-ghost" id="as-cancel">Cancel</button>'+
-      '<button type="button" class="btn btn-primary" id="as-submit">Add stock</button>'+
+      '<button type="button" class="btn btn-primary" id="as-submit">Save</button>'+
     '</div>'
   );
   $('as-cancel').addEventListener('click', closeModal);
@@ -450,13 +454,16 @@ function openAddStockModal(id){
     var msg = $('as-msg');
     var qty = parseInt($('as-qty').value,10);
     if(!qty || qty<=0){ msg.textContent='Enter a quantity greater than 0.'; msg.className='msg err'; return; }
+    var dir = (document.querySelector('input[name="as-dir"]:checked')||{}).value || 'add';
+    var delta = dir==='remove' ? -qty : qty;
+    if(dir==='remove' && qty>p.stock_qty){ msg.textContent='Cannot remove more than the current stock ('+p.stock_qty+').'; msg.className='msg err'; return; }
     var reason = $('as-reason').value.trim() || null;
     var btn = $('as-submit');
     btn.disabled = true;
-    sb.rpc('shop_add_stock', {p_product_id:id, p_qty:qty, p_reason:reason}).then(function(r){
+    sb.rpc('shop_add_stock', {p_product_id:id, p_qty:delta, p_reason:reason}).then(function(r){
       btn.disabled = false;
       if(r.error){ msg.textContent = r.error.message; msg.className='msg err'; return; }
-      toast('Stock updated: +'+qty);
+      toast('Stock updated: '+(delta>0?'+':'')+delta);
       closeModal();
       showTab('products');
     });
@@ -466,6 +473,7 @@ function openAddStockModal(id){
 /* ---------------- activity log ---------------- */
 var ACTIVITY_LABELS = {
   stock_added: 'Stock added',
+  stock_corrected: 'Stock corrected',
   order_placed: 'Order placed',
   order_cancelled: 'Order cancelled',
   walkin_sale_recorded: 'Walk-in sale recorded',
@@ -479,7 +487,9 @@ function activityDetails(a){
   var d = a.details||{};
   switch(a.action){
     case 'stock_added':
-      return esc(d.product_name||'')+': +'+d.qty_added+' &rarr; '+d.new_stock+' in stock'+(d.reason?' — '+esc(d.reason):'');
+    case 'stock_corrected':
+      var qc = (d.qty_change!=null ? d.qty_change : d.qty_added);
+      return esc(d.product_name||'')+': '+(qc>0?'+':'')+qc+' &rarr; '+d.new_stock+' in stock'+(d.reason?' — '+esc(d.reason):'');
     case 'order_placed':
       return 'Order #'+String(d.order_id||'').slice(0,8)+' &middot; '+peso.format(d.total||0)+' &middot; '+esc((d.payment_method||'').toUpperCase());
     case 'order_cancelled':

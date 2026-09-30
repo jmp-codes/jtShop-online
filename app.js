@@ -173,7 +173,8 @@ function renderCartDrawer(){
     var qty = state.cart[id];
     var sub = p.price*qty; total += sub;
     return '<div class="cart-line">'+
-      '<div><div class="name">'+esc(p.name)+'</div><div class="sub">'+peso.format(p.price)+' each</div></div>'+
+      '<div class="cart-line-thumb">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'🧴')+'</div>'+
+      '<div class="cart-line-info"><div class="name">'+esc(p.name)+'</div><div class="sub">'+peso.format(p.price)+' each</div></div>'+
       '<div class="qty-stepper">'+
         '<button data-dec="'+id+'" aria-label="Decrease">−</button>'+
         '<input value="'+qty+'" readonly aria-label="Quantity">'+

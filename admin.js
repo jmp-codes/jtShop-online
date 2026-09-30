@@ -150,13 +150,36 @@ function renderDashboard(body){
 }
 
 /* ---------------- orders ---------------- */
+var ORDER_FILTERS = [
+  {key:'all', label:'All'},
+  {key:'walk_in', label:'Walk-in Purchase'},
+  {key:'online', label:'Online Orders'},
+  {key:'cod', label:'Reservations'}
+];
+var ordersFilter = 'all';
 function renderOrders(body){
+  var counts = {all: orders.length, walk_in:0, online:0, cod:0};
+  orders.forEach(function(o){ if(counts[o.payment_method]!==undefined) counts[o.payment_method]++; });
+  if(!ORDER_FILTERS.some(function(f){return f.key===ordersFilter})) ordersFilter='all';
+
   var topbar = '<div class="admin-topbar" style="margin-bottom:14px">'+
       '<h2 style="margin:0">Orders &middot; '+orders.length+'</h2>'+
       '<button class="btn btn-primary" id="open-walkin-sale">+ Record walk-in sale</button>'+
     '</div>';
-  if(!orders.length){ body.innerHTML = topbar+'<p class="empty">No orders yet.</p>'; $('open-walkin-sale').addEventListener('click', openWalkinSaleModal); return; }
-  body.innerHTML = topbar + orders.map(function(o){
+  var subtabs = '<div class="subtabs">'+ORDER_FILTERS.map(function(f){
+    return '<button class="subtab-btn'+(ordersFilter===f.key?' active':'')+'" data-filter="'+f.key+'">'+f.label+' <span class="count">'+counts[f.key]+'</span></button>';
+  }).join('')+'</div>';
+
+  body.innerHTML = topbar + subtabs + '<div id="order-list"></div>';
+  $('open-walkin-sale').addEventListener('click', openWalkinSaleModal);
+  body.querySelectorAll('.subtab-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){ ordersFilter = btn.getAttribute('data-filter'); renderOrders(body); });
+  });
+
+  var list = $('order-list');
+  var filtered = ordersFilter==='all' ? orders : orders.filter(function(o){ return o.payment_method===ordersFilter; });
+  if(!filtered.length){ list.innerHTML = '<p class="empty">No orders in this category yet.</p>'; return; }
+  list.innerHTML = filtered.map(function(o){
     var items = (o.shop_order_items||[]).map(function(i){ return esc(i.name_snapshot)+' × '+i.qty+' ('+peso.format(i.subtotal)+')'; }).join('<br>');
     var isWalkin = o.payment_method==='walk_in';
     var buyer = isWalkin ? 'Walk-in sale' : ((o.shop_profiles && o.shop_profiles.full_name) || 'Customer');
@@ -164,24 +187,25 @@ function renderOrders(body){
       ? (o.notes ? 'Note: '+esc(o.notes) : 'In-person sale')
       : 'Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; Note: '+esc(o.notes):'')+' &middot; '+o.payment_method.toUpperCase();
     return '<div class="order-card">'+
-      '<div class="order-head"><div><strong>'+esc(buyer)+'</strong>'+(isWalkin?' <span class="pill" style="background:var(--accent-soft);color:var(--accent)">Walk-in</span>':'')+' · '+peso.format(o.total)+' · <span class="helper">'+new Date(o.created_at).toLocaleString('en-PH')+'</span></div></div>'+
-      '<div class="order-items">'+items+'</div>'+
-      '<div class="order-items">'+meta+'</div>'+
-      '<div class="form-grid" style="margin-top:10px;max-width:420px">'+
+      '<div class="order-main">'+
+        '<div class="order-head"><div><strong>'+esc(buyer)+'</strong>'+(isWalkin?' <span class="pill" style="background:var(--accent-soft);color:var(--accent)">Walk-in</span>':'')+' · '+peso.format(o.total)+' · <span class="helper">'+new Date(o.created_at).toLocaleString('en-PH')+'</span></div></div>'+
+        '<div class="order-items">'+items+'</div>'+
+        '<div class="order-items">'+meta+'</div>'+
+      '</div>'+
+      '<div class="order-controls">'+
         '<label>Status<select data-status="'+o.id+'">'+statuses.map(function(s){return '<option value="'+s+'"'+(s===o.status?' selected':'')+'>'+s.replace(/_/g,' ')+'</option>'}).join('')+'</select></label>'+
         '<label>Payment<select data-payment="'+o.id+'"><option value="unpaid"'+(o.payment_status==='unpaid'?' selected':'')+'>Unpaid</option><option value="paid"'+(o.payment_status==='paid'?' selected':'')+'>Paid</option><option value="refunded"'+(o.payment_status==='refunded'?' selected':'')+'>Refunded</option></select></label>'+
       '</div>'+
     '</div>';
   }).join('');
-  $('open-walkin-sale').addEventListener('click', openWalkinSaleModal);
-  body.querySelectorAll('[data-status]').forEach(function(sel){
+  list.querySelectorAll('[data-status]').forEach(function(sel){
     sel.addEventListener('change', function(){
       var id=sel.getAttribute('data-status'), val=sel.value;
       var task = val==='cancelled' ? sb.rpc('shop_cancel_order',{p_order_id:id}) : sb.from('shop_orders').update({status:val}).eq('id',id);
       task.then(function(r){ if(r.error){ toast(r.error.message); } else { toast('Order updated'); } });
     });
   });
-  body.querySelectorAll('[data-payment]').forEach(function(sel){
+  list.querySelectorAll('[data-payment]').forEach(function(sel){
     sel.addEventListener('change', function(){
       sb.from('shop_orders').update({payment_status:sel.value}).eq('id',sel.getAttribute('data-payment')).then(function(r){
         if(r.error) toast(r.error.message); else toast('Payment status updated');
@@ -313,25 +337,34 @@ function openAddProductModal(){
 
 /* ---------------- walk-in sale ---------------- */
 var walkinRowSeq = 0;
-function walkinProductOptions(selectedId){
-  return '<option value="">Select a product…</option>' + products.map(function(p){
-    return '<option value="'+p.id+'"'+(p.id===selectedId?' selected':'')+(p.active?'':' disabled')+'>'+
-      esc(p.name)+' — '+peso.format(p.price)+' ('+p.stock_qty+' in stock)'+(p.active?'':' [inactive]')+'</option>';
-  }).join('');
+var walkinLabelMap = {}; // display label -> product, rebuilt each time the modal opens
+function walkinProductLabel(p){
+  return p.name+' — '+peso.format(p.price)+' ('+p.stock_qty+' in stock)'+(p.active?'':' [inactive]');
 }
 function walkinRowHtml(){
   var rid = 'wr'+(++walkinRowSeq);
-  return '<div class="walkin-row" data-wrow="'+rid+'" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px">'+
-    '<label style="flex:1;margin:0">'+(walkinRowSeq===1?'Product':'')+'<select class="wr-product">'+walkinProductOptions()+'</select></label>'+
-    '<label style="width:90px;margin:0">'+(walkinRowSeq===1?'Qty':'')+'<input class="wr-qty" type="number" min="1" step="1" value="1"></label>'+
-    '<button type="button" class="btn btn-ghost btn-sm wr-remove" style="margin-bottom:1px">✕</button>'+
+  return '<div class="walkin-row" data-wrow="'+rid+'">'+
+    '<div style="display:flex;gap:8px;align-items:flex-end">'+
+      '<label style="flex:1;margin:0">'+(walkinRowSeq===1?'Product':'')+
+        '<input class="wr-product prod-input" list="wk-product-datalist" placeholder="Type to search products…" autocomplete="off"></label>'+
+      '<label style="width:90px;margin:0">'+(walkinRowSeq===1?'Qty':'')+'<input class="wr-qty prod-input" type="number" min="1" step="1" value="1"></label>'+
+      '<button type="button" class="btn btn-ghost btn-sm wr-remove" style="margin-bottom:1px">✕</button>'+
+    '</div>'+
+    '<div class="wr-hint helper">Start typing a product name…</div>'+
   '</div>';
 }
 function openWalkinSaleModal(){
   walkinRowSeq = 0;
   if(!products.length){ toast('Add a product to Inventory first.'); return; }
+  walkinLabelMap = {};
+  var datalistOptions = products.map(function(p){
+    var label = walkinProductLabel(p);
+    walkinLabelMap[label] = p;
+    return '<option value="'+esc(label)+'">';
+  }).join('');
   openModal('Record a walk-in sale',
     '<p class="helper" style="margin-top:0">For sales made in person — deducts stock and counts toward revenue and your commission, same as an online order.</p>'+
+    '<datalist id="wk-product-datalist">'+datalistOptions+'</datalist>'+
     '<div id="walkin-rows">'+walkinRowHtml()+'</div>'+
     '<button type="button" class="btn btn-ghost btn-sm" id="wr-add">+ Add another item</button>'+
     '<label style="margin-top:14px">Note (optional)<input id="wk-note" placeholder="e.g. customer name"></label>'+
@@ -347,8 +380,10 @@ function openWalkinSaleModal(){
   $('wr-add').addEventListener('click', function(){
     $('walkin-rows').insertAdjacentHTML('beforeend', walkinRowHtml());
     bindWalkinRowRemove();
+    bindWalkinRowInput();
   });
   bindWalkinRowRemove();
+  bindWalkinRowInput();
   $('wk-cancel').addEventListener('click', closeModal);
   $('wk-submit').addEventListener('click', submitWalkinSale);
 }
@@ -361,19 +396,50 @@ function bindWalkinRowRemove(){
     };
   });
 }
+function bindWalkinRowInput(){
+  document.querySelectorAll('.wr-product').forEach(function(input){
+    if(input.dataset.bound) return;
+    input.dataset.bound = '1';
+    input.addEventListener('input', function(){ updateWalkinRowHint(input); });
+  });
+}
+function updateWalkinRowHint(input){
+  var row = input.closest('.walkin-row');
+  var hint = row.querySelector('.wr-hint');
+  var val = input.value.trim();
+  if(!val){
+    input.removeAttribute('data-pid');
+    hint.textContent = 'Start typing a product name…';
+    hint.style.color = '';
+    return;
+  }
+  var p = walkinLabelMap[val];
+  if(p){
+    input.setAttribute('data-pid', p.id);
+    hint.textContent = '✓ '+p.name+' — '+p.stock_qty+' in stock';
+    hint.style.color = 'var(--ok)';
+  } else {
+    input.removeAttribute('data-pid');
+    hint.textContent = 'Keep typing or choose a suggestion from the list';
+    hint.style.color = 'var(--muted)';
+  }
+}
 function submitWalkinSale(){
   var msg = $('wk-msg');
   var items = [];
   var bad = false;
   document.querySelectorAll('.walkin-row').forEach(function(row){
-    var pid = row.querySelector('.wr-product').value;
+    var input = row.querySelector('.wr-product');
+    var pid = input.getAttribute('data-pid');
     var qty = parseInt(row.querySelector('.wr-qty').value,10);
-    if(!pid) return;
-    if(!qty || qty<=0){ bad = true; return; }
+    if(!input.value.trim()) return;
+    if(!pid){ bad = 'match'; return; }
+    if(!qty || qty<=0){ bad = bad || 'qty'; return; }
     items.push({product_id: pid, qty: qty});
   });
-  if(bad){ msg.textContent='Quantities must be at least 1.'; msg.className='msg err'; return; }
-  if(!items.length){ msg.textContent='Pick at least one product.'; msg.className='msg err'; return; }
+  if(bad==='match'){ msg.textContent='Pick a product from the suggestions for each item.'; msg.className='msg err'; return; }
+  if(bad==='qty'){ msg.textContent='Quantities must be at least 1.'; msg.className='msg err'; return; }
+  if(!items.length){ msg.textContent='Type a product name and pick a match.'; msg.className='msg err'; return; }
   var note = $('wk-note').value.trim() || null;
   var paid = $('wk-paid').checked;
   var btn = $('wk-submit');

@@ -55,6 +55,15 @@ function toast(msg){
   toastTimer=setTimeout(function(){t.hidden=true},2600);
 }
 
+/* ---------------- image lightbox ---------------- */
+function openImageLightbox(src){
+  var box = document.createElement('div');
+  box.className = 'img-lightbox';
+  box.innerHTML = '<img src="'+esc(src)+'" alt="">';
+  box.addEventListener('click', function(){ box.remove(); });
+  document.body.appendChild(box);
+}
+
 /* ---------------- data ---------------- */
 function fetchProducts(){
   return sb.from('shop_products').select('*').eq('active',true).order('name')
@@ -350,7 +359,8 @@ function renderCheckout(){
             '</select>'+
           '</label>'+
           '<div class="wide gcash-panel" id="gcash-panel" hidden>'+
-            '<img src="gcash-qr.png" alt="GCash QR code" class="gcash-qr">'+
+            '<img src="gcash-qr.png" alt="GCash QR code — tap to enlarge" class="gcash-qr" id="gcash-qr-img">'+
+            '<div class="helper" style="margin:4px 0 8px">Tap the QR to enlarge</div>'+
             '<p class="helper" style="margin:8px 0">Scan the QR above in your GCash app, send <strong>'+peso.format(total)+'</strong>, then enter the reference number from your GCash receipt below.</p>'+
             '<label class="wide">GCash reference number<input id="c-gcash-ref" placeholder="e.g. 1234567890123"></label>'+
           '</div>'+
@@ -367,6 +377,7 @@ function renderCheckout(){
   $('c-payment').addEventListener('change', function(){
     $('gcash-panel').hidden = $('c-payment').value !== 'online';
   });
+  $('gcash-qr-img').addEventListener('click', function(){ openImageLightbox('gcash-qr.png'); });
   $('checkout-form').addEventListener('submit', function(ev){
     ev.preventDefault();
     var msg=$('checkout-msg');

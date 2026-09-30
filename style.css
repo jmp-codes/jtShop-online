@@ -234,7 +234,11 @@ tr.editing .prod-input{background:var(--surface);border-color:var(--accent)}
 
 /* GCash manual payment panel */
 .gcash-panel{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:14px;margin:-2px 0 2px;text-align:center}
-.gcash-qr{width:180px;max-width:100%;border-radius:10px;border:1px solid var(--line);background:#fff}
+.gcash-qr{width:260px;max-width:100%;border-radius:10px;border:1px solid var(--line);background:#fff;cursor:zoom-in;transition:transform .15s ease}
+.gcash-qr:hover{transform:scale(1.03)}
+.img-lightbox{position:fixed;inset:0;background:rgba(20,10,40,.72);display:flex;align-items:center;justify-content:center;z-index:2000;cursor:zoom-out;padding:24px;animation:lightbox-in .15s ease}
+.img-lightbox img{max-width:min(90vw,480px);max-height:90vh;border-radius:14px;background:#fff;box-shadow:0 20px 50px -10px rgba(0,0,0,.5)}
+@keyframes lightbox-in{from{opacity:0}to{opacity:1}}
 
 /* stock adjustment modal */
 .seg-control{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}

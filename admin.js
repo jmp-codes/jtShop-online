@@ -146,6 +146,10 @@ function renderDashboard(body){
   var stockValue = products.reduce(function(a,p){return a+p.stock_qty*p.price},0);
   var lowStock = products.filter(function(p){return p.active && p.stock_qty>0 && p.stock_qty<=3});
   var outOfStock = products.filter(function(p){return p.active && p.stock_qty<=0});
+  var preorderItems = [];
+  live.forEach(function(o){
+    (o.shop_order_items||[]).forEach(function(i){ if(i.preorder_qty>0) preorderItems.push(i); });
+  });
   var revenue = live.reduce(function(a,o){return a+Number(o.total)},0);
   var collected = live.filter(function(o){return o.payment_status==='paid'}).reduce(function(a,o){return a+Number(o.total)},0);
   var COMMISSION_RATE = 0.2; // ₱200 commission for every ₱1,000 sold
@@ -176,6 +180,7 @@ function renderDashboard(body){
       '<div class="stat-tile"><span class="l">Stock value</span><span class="v">'+peso0.format(stockValue)+'</span><span class="s">at price</span></div>'+
       '<div class="stat-tile"><span class="l">Low stock</span><span class="v" style="color:var(--warn)">'+lowStock.length+'</span><span class="s">3 or fewer left</span></div>'+
       '<div class="stat-tile"><span class="l">Out of stock</span><span class="v" style="color:var(--bad)">'+outOfStock.length+'</span><span class="s">needs restock</span></div>'+
+      '<div class="stat-tile"><span class="l">Pending pre-orders</span><span class="v" style="color:var(--warn)">'+preorderItems.length+'</span><span class="s">awaiting restock</span></div>'+
     '</div>'+
     '<div class="two-col">'+
       '<div class="card-section">'+
@@ -189,13 +194,15 @@ function renderDashboard(body){
           : '<p class="helper">No sales yet.</p>')+
       '</div>'+
     '</div>'+
-    (lowStock.length||outOfStock.length ?
+    (lowStock.length||outOfStock.length||preorderItems.length ?
       '<div class="card-section">'+
         '<h2>Needs attention</h2>'+
         '<ul class="rank-list">'+
           outOfStock.map(function(p){return '<li><span>'+esc(p.name)+'</span><span class="pill zero-pill" style="background:var(--bad-soft);color:var(--bad)">Out of stock</span></li>'}).join('')+
           lowStock.map(function(p){return '<li><span>'+esc(p.name)+'</span><span class="pill" style="background:var(--warn-soft);color:var(--warn)">'+p.stock_qty+' left</span></li>'}).join('')+
+          preorderItems.map(function(i){return '<li><span>'+esc(i.name_snapshot)+'</span><span class="pill preorder">Pre-order &times;'+i.preorder_qty+'</span></li>'}).join('')+
         '</ul>'+
+        (preorderItems.length ? '<p class="helper" style="margin:10px 0 0">Restock, then fulfill pending pre-orders from the Orders tab.</p>' : '')+
       '</div>' : '');
 }
 
@@ -204,13 +211,17 @@ var ORDER_FILTERS = [
   {key:'all', label:'All'},
   {key:'walk_in', label:'Walk-in Purchase'},
   {key:'online', label:'Online Orders'},
-  {key:'cod', label:'Reservations'}
+  {key:'cod', label:'Reservations'},
+  {key:'preorder', label:'Pre-orders'}
 ];
 var ordersFilter = 'all';
 var ordersPage = 1;
 function renderOrders(body){
-  var counts = {all: orders.length, walk_in:0, online:0, cod:0};
-  orders.forEach(function(o){ if(counts[o.payment_method]!==undefined) counts[o.payment_method]++; });
+  var counts = {all: orders.length, walk_in:0, online:0, cod:0, preorder:0};
+  orders.forEach(function(o){
+    if(counts[o.payment_method]!==undefined) counts[o.payment_method]++;
+    if(o.has_preorder) counts.preorder++;
+  });
   if(!ORDER_FILTERS.some(function(f){return f.key===ordersFilter})) ordersFilter='all';
 
   var topbar = '<div class="admin-topbar" style="margin-bottom:14px">'+
@@ -233,7 +244,9 @@ function renderOrders(body){
   });
 
   var list = $('order-list');
-  var filtered = ordersFilter==='all' ? orders : orders.filter(function(o){ return o.payment_method===ordersFilter; });
+  var filtered = ordersFilter==='all' ? orders :
+    ordersFilter==='preorder' ? orders.filter(function(o){ return o.has_preorder; }) :
+    orders.filter(function(o){ return o.payment_method===ordersFilter; });
   if(!filtered.length){ list.innerHTML = '<p class="empty">No orders in this category yet.</p>'; return; }
 
   // fit as many order cards as the screen height allows
@@ -242,7 +255,20 @@ function renderOrders(body){
   ordersPage = pr.page;
 
   list.innerHTML = pr.items.map(function(o){
-    var items = (o.shop_order_items||[]).map(function(i){ return esc(i.name_snapshot)+' × '+i.qty+' ('+peso.format(i.subtotal)+')'; }).join('<br>');
+    var items = (o.shop_order_items||[]).map(function(i){
+      var line = esc(i.name_snapshot)+' × '+i.qty+' ('+peso.format(i.subtotal)+')';
+      if(i.preorder_qty>0){
+        var prod = products.find(function(x){return x.id===i.product_id});
+        var avail = prod ? prod.stock_qty : 0;
+        line += ' <span class="pill preorder">Pre-order '+i.preorder_qty+'</span>';
+        if(avail>0){
+          line += ' <button class="btn btn-ghost btn-sm" data-fulfill="'+i.id+'">Fulfill '+Math.min(avail,i.preorder_qty)+'</button>';
+        } else {
+          line += ' <span class="helper">(0 in stock)</span>';
+        }
+      }
+      return '<div>'+line+'</div>';
+    }).join('');
     var isWalkin = o.payment_method==='walk_in';
     var buyer = isWalkin ? 'Walk-in sale' : ((o.shop_profiles && o.shop_profiles.full_name) || 'Customer');
     var meta = isWalkin
@@ -251,7 +277,7 @@ function renderOrders(body){
         (o.payment_method==='online' && o.payment_reference ? ' &middot; <strong>GCash ref: '+esc(o.payment_reference)+'</strong>' : '');
     return '<div class="order-card">'+
       '<div class="order-main">'+
-        '<div class="order-head"><div><strong>'+esc(buyer)+'</strong>'+(isWalkin?' <span class="pill" style="background:var(--accent-soft);color:var(--accent)">Walk-in</span>':'')+' · '+peso.format(o.total)+' · <span class="helper">'+new Date(o.created_at).toLocaleString('en-PH')+'</span></div></div>'+
+        '<div class="order-head"><div><strong>'+esc(buyer)+'</strong>'+(isWalkin?' <span class="pill" style="background:var(--accent-soft);color:var(--accent)">Walk-in</span>':'')+(o.has_preorder?' <span class="pill preorder">Pre-order</span>':'')+' · '+peso.format(o.total)+' · <span class="helper">'+new Date(o.created_at).toLocaleString('en-PH')+'</span></div></div>'+
         '<div class="order-items">'+items+'</div>'+
         '<div class="order-items">'+meta+'</div>'+
       '</div>'+
@@ -265,6 +291,17 @@ function renderOrders(body){
   var prevBtn = $('orders-prev'), nextBtn = $('orders-next');
   if(prevBtn) prevBtn.addEventListener('click', function(){ ordersPage--; renderOrders(body); });
   if(nextBtn) nextBtn.addEventListener('click', function(){ ordersPage++; renderOrders(body); });
+  list.querySelectorAll('[data-fulfill]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var id = btn.getAttribute('data-fulfill');
+      btn.disabled = true;
+      sb.rpc('shop_fulfill_preorder', {p_order_item_id:id}).then(function(r){
+        if(r.error){ toast(r.error.message); btn.disabled = false; return; }
+        toast('Fulfilled '+r.data+' from pre-order');
+        showTab('orders');
+      });
+    });
+  });
 
   list.querySelectorAll('[data-status]').forEach(function(sel){
     sel.addEventListener('change', function(){
@@ -494,7 +531,8 @@ var ACTIVITY_LABELS = {
   product_added: 'Product added',
   product_updated: 'Product updated',
   order_status_changed: 'Order status changed',
-  order_payment_changed: 'Payment status changed'
+  order_payment_changed: 'Payment status changed',
+  preorder_fulfilled: 'Pre-order fulfilled'
 };
 function activityLabel(a){ return ACTIVITY_LABELS[a.action] || a.action; }
 function activityDetails(a){
@@ -518,6 +556,8 @@ function activityDetails(a){
       return 'Order #'+String(d.order_id||'').slice(0,8)+' &rarr; '+esc((d.status||'').replace(/_/g,' '));
     case 'order_payment_changed':
       return 'Order #'+String(d.order_id||'').slice(0,8)+' &rarr; '+esc(d.payment_status||'');
+    case 'preorder_fulfilled':
+      return esc(d.product_name||'')+' &middot; '+d.qty_fulfilled+' fulfilled for order #'+String(d.order_id||'').slice(0,8)+(d.remaining_preorder?' &middot; '+d.remaining_preorder+' still pending':'');
     default:
       return esc(JSON.stringify(d));
   }

@@ -145,24 +145,27 @@ function renderShop(){
         var id = btn.getAttribute('data-add');
         var p = productById(id);
         var have = state.cart[id]||0;
-        if(have >= p.stock_qty){ toast('Only '+p.stock_qty+' in stock.'); return; }
         state.cart[id] = have+1;
         saveCart();
-        toast('Added '+p.name+' to cart');
+        if(have+1 > p.stock_qty){
+          toast(p.stock_qty<=0 ? 'Pre-ordered '+p.name+' — ships once restocked' : 'Added '+p.name+' to cart (part will be a pre-order)');
+        } else {
+          toast('Added '+p.name+' to cart');
+        }
       });
     });
   }).catch(function(e){ $('app').innerHTML = errBox(e); });
 }
 function productCard(p){
   var cls = p.stock_qty<=0?'zero':(p.stock_qty<=3?'low':'ok');
-  var stockText = p.stock_qty<=0 ? 'Out of stock' : (p.stock_qty<=3 ? 'Only '+p.stock_qty+' left' : p.stock_qty+' in stock');
+  var stockText = p.stock_qty<=0 ? 'Out of stock — pre-order available' : (p.stock_qty<=3 ? 'Only '+p.stock_qty+' left' : p.stock_qty+' in stock');
   return '<div class="card">'+
     '<div class="card-media">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'🧴')+'</div>'+
     '<div class="card-body">'+
       '<div class="card-name">'+esc(p.name)+'</div>'+
       (p.description?'<div class="card-desc">'+esc(p.description)+'</div>':'<div class="card-desc"></div>')+
       '<div class="card-row"><span class="price">'+peso.format(p.price)+'</span><span class="stockline '+cls+'">'+stockText+'</span></div>'+
-      '<button class="btn btn-primary btn-block" data-add="'+p.id+'" '+(p.stock_qty<=0?'disabled':'')+'>Add to cart</button>'+
+      '<button class="btn '+(p.stock_qty<=0?'btn-outline':'btn-primary')+' btn-block" data-add="'+p.id+'">'+(p.stock_qty<=0?'Pre-order':'Add to cart')+'</button>'+
     '</div></div>';
 }
 
@@ -181,13 +184,16 @@ function renderCartDrawer(){
     var p = productById(id); if(!p) return '';
     var qty = state.cart[id];
     var sub = p.price*qty; total += sub;
+    var preorderQty = Math.max(0, qty - p.stock_qty);
     return '<div class="cart-line">'+
       '<div class="cart-line-thumb">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="">':'🧴')+'</div>'+
-      '<div class="cart-line-info"><div class="name">'+esc(p.name)+'</div><div class="sub">'+peso.format(p.price)+' each</div></div>'+
+      '<div class="cart-line-info"><div class="name">'+esc(p.name)+'</div><div class="sub">'+peso.format(p.price)+' each</div>'+
+        (preorderQty>0?'<div class="preorder-tag">'+(preorderQty===qty?'Pre-order':'Pre-order '+preorderQty+' of '+qty)+'</div>':'')+
+      '</div>'+
       '<div class="qty-stepper">'+
         '<button data-dec="'+id+'" aria-label="Decrease">−</button>'+
         '<input value="'+qty+'" readonly aria-label="Quantity">'+
-        '<button data-inc="'+id+'" aria-label="Increase" '+(qty>=p.stock_qty?'disabled':'')+'>+</button>'+
+        '<button data-inc="'+id+'" aria-label="Increase">+</button>'+
       '</div>'+
       '<div class="sub" style="min-width:64px;text-align:right">'+peso.format(sub)+'</div>'+
     '</div>';
@@ -195,8 +201,8 @@ function renderCartDrawer(){
   $('cart-total').textContent = peso.format(total);
   $('checkout-btn').disabled = false;
   body.querySelectorAll('[data-inc]').forEach(function(b){b.addEventListener('click',function(){
-    var id=b.getAttribute('data-inc'), p=productById(id);
-    if(state.cart[id]<p.stock_qty){ state.cart[id]++; saveCart(); renderCartDrawer(); }
+    var id=b.getAttribute('data-inc');
+    state.cart[id] = (state.cart[id]||0)+1; saveCart(); renderCartDrawer();
   })});
   body.querySelectorAll('[data-dec]').forEach(function(b){b.addEventListener('click',function(){
     var id=b.getAttribute('data-dec');
@@ -340,9 +346,11 @@ function renderCheckout(){
   var app = $('app');
   var ids = Object.keys(state.cart).filter(function(id){return state.cart[id]>0});
   if(!ids.length){ app.innerHTML = '<p class="empty">Your cart is empty. <a href="#/">Go shopping</a></p>'; return; }
-  var total=0, lines = ids.map(function(id){
+  var total=0, anyPreorder=false, lines = ids.map(function(id){
     var p=productById(id), qty=state.cart[id], sub=p.price*qty; total+=sub;
-    return '<div class="cart-line"><div class="name">'+esc(p.name)+' × '+qty+'</div><div>'+peso.format(sub)+'</div></div>';
+    var preorderQty = Math.max(0, qty - p.stock_qty);
+    if(preorderQty>0) anyPreorder = true;
+    return '<div class="cart-line"><div class="name">'+esc(p.name)+' × '+qty+(preorderQty>0?' <span class="preorder-tag">'+(preorderQty===qty?'Pre-order':preorderQty+' pre-order')+'</span>':'')+'</div><div>'+peso.format(sub)+'</div></div>';
   }).join('');
   app.innerHTML =
     '<h1>Checkout</h1>'+
@@ -372,6 +380,7 @@ function renderCheckout(){
       '<div class="card-section">'+
         '<h2>Order summary</h2>'+lines+
         '<div class="cart-total" style="margin-top:10px"><span>Total</span><strong>'+peso.format(total)+'</strong></div>'+
+        (anyPreorder?'<p class="helper" style="margin-top:10px">Items marked <span class="preorder-tag">Pre-order</span> aren\'t in stock yet — we\'ll deliver those once restocked.</p>':'')+
       '</div>'+
     '</div>';
   $('c-payment').addEventListener('change', function(){
@@ -427,14 +436,16 @@ function renderOrders(){
     });
 }
 function orderCard(adminView, o){
-  var items = (o.shop_order_items||[]).map(function(i){ return esc(i.name_snapshot)+' × '+i.qty; }).join(', ');
+  var items = (o.shop_order_items||[]).map(function(i){
+    return esc(i.name_snapshot)+' × '+i.qty+(i.preorder_qty>0?' <span class="preorder-tag">'+(i.preorder_qty===i.qty?'Pre-order':i.preorder_qty+' pre-order')+'</span>':'');
+  }).join(', ');
   var when = new Date(o.created_at).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
   return '<div class="order-card">'+
     '<div class="order-head">'+
       '<div><strong>'+peso.format(o.total)+'</strong> · <span class="helper">'+when+'</span></div>'+
-      '<div><span class="pill '+o.status+'">'+o.status.replace(/_/g,' ')+'</span> <span class="pill '+o.payment_status+'">'+o.payment_status+'</span></div>'+
+      '<div><span class="pill '+o.status+'">'+o.status.replace(/_/g,' ')+'</span> <span class="pill '+o.payment_status+'">'+o.payment_status+'</span>'+(o.has_preorder?' <span class="pill preorder">Pre-order</span>':'')+'</div>'+
     '</div>'+
-    '<div class="order-items">'+esc(items)+'</div>'+
+    '<div class="order-items">'+items+'</div>'+
     '<div class="order-items">Deliver to: '+esc(o.deliver_to)+' &middot; '+esc(o.phone)+(o.notes?' &middot; '+esc(o.notes):'')+'</div>'+
     (o.payment_method==='online' ? '<div class="order-items">Paid via GCash'+(o.payment_reference?' &middot; Ref #'+esc(o.payment_reference):'')+'</div>' : '')+
     (!adminView && o.status==='pending' ? '<div style="margin-top:10px"><button class="btn btn-danger btn-sm" data-cancel="'+o.id+'">Cancel order</button></div>' : '')+

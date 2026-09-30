@@ -114,6 +114,7 @@ window.addEventListener('resize', function(){
     if(!body) return;
     if(currentTab==='orders') renderOrders(body);
     else if(currentTab==='activity') renderActivityLog(body);
+    else if(currentTab==='products') renderProducts(body);
   }, 200);
 });
 
@@ -292,6 +293,7 @@ function nameTaken(name, excludeId){
   var key = name.trim().toLowerCase();
   return products.some(function(p){ return p.id!==excludeId && p.name.trim().toLowerCase()===key; });
 }
+var productsPage = 1;
 function renderProducts(body){
   body.innerHTML =
     '<div class="admin-topbar" style="margin-bottom:14px">'+
@@ -300,8 +302,19 @@ function renderProducts(body){
     '</div>'+
     '<div class="tbl-wrap"><table class="prod-table"><colgroup>'+
       '<col class="col-name"><col class="col-num"><col class="col-num"><col class="col-active"><col class="col-save">'+
-    '</colgroup><thead><tr><th>Name</th><th>Price</th><th>Stock</th><th>Active</th><th>Actions</th></tr></thead><tbody id="prod-body"></tbody></table></div>';
-  $('prod-body').innerHTML = products.map(function(p){
+    '</colgroup><thead><tr><th>Name</th><th>Price</th><th>Stock</th><th>Active</th><th>Actions</th></tr></thead><tbody id="prod-body"></tbody></table></div>'+
+    '<div id="prod-pager"></div>';
+
+  // fit as many inventory rows as the screen height allows
+  var pageSize = computePageSize(66, 380, 4, 40);
+  var pr = paginate(products, productsPage, pageSize);
+  productsPage = pr.page;
+  $('prod-pager').innerHTML = pagerHtml(pr.page, pr.totalPages, 'prod');
+  var prevBtn = $('prod-prev'), nextBtn = $('prod-next');
+  if(prevBtn) prevBtn.addEventListener('click', function(){ productsPage--; renderProducts(body); });
+  if(nextBtn) nextBtn.addEventListener('click', function(){ productsPage++; renderProducts(body); });
+
+  $('prod-body').innerHTML = pr.items.map(function(p){
     var thumb = p.image_url
       ? '<img src="'+esc(p.image_url)+'" alt="" class="prod-thumb" onerror="this.style.visibility=\'hidden\'">'
       : '<div class="prod-thumb prod-thumb-empty"></div>';
